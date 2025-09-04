@@ -18,8 +18,8 @@ A secure password manager with import capabilities from various sources.
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/Nsfr750/password-manager.git
-   cd password-manager
+   git clone https://github.com/Nsfr750/pass_mgr.git
+   cd pass_mgr
    ```
 
 2. Create a virtual environment:

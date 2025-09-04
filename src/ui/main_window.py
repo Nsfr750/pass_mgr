@@ -693,7 +693,7 @@ class MainWindow(QMainWindow):
         from PySide6.QtGui import QDesktopServices
         from PySide6.QtCore import QUrl
         
-        wiki_url = QUrl("https://github.com/Nsfr750/password_manager/wiki")
+        wiki_url = QUrl("https://github.com/Nsfr750/pass_mgr/wiki")
         if not QDesktopServices.openUrl(wiki_url):
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.warning(
@@ -707,7 +707,7 @@ class MainWindow(QMainWindow):
         from PySide6.QtGui import QDesktopServices
         from PySide6.QtCore import QUrl
         
-        issues_url = QUrl("https://github.com/Nsfr750/password_manager/issues")
+        issues_url = QUrl("https://github.com/Nsfr750/pass_mgr/issues")
         if not QDesktopServices.openUrl(issues_url):
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.warning(
