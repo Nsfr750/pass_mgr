@@ -30,21 +30,41 @@ class AboutDialog(QDialog):
         self.setWindowTitle("About Password Manager")
         self.setModal(True)
         self.setFixedSize(500, 500)
+        # Use system palette for theming
         self.setStyleSheet("""
             QDialog {
-                background-color: #f5f5f5;
+                background-color: #2d2d2d;
             }
             QLabel {
-                color: #333333;
+                color: #f0f0f0;
             }
             QPushButton {
                 padding: 5px 15px;
-                border: 1px solid #cccccc;
+                border: 1px solid #444444;
                 border-radius: 4px;
-                background-color: #f0f0f0;
+                background-color: #3a3a3a;
+                color: #f0f0f0;
             }
             QPushButton:hover {
-                background-color: #e0e0e0;
+                background-color: #4a4a4a;
+                border: 1px solid #555555;
+            }
+            QPushButton:pressed {
+                background-color: #2a2a2a;
+            }
+            QTextBrowser {
+                background-color: #2a2a2a;
+                border: 1px solid #444444;
+                border-radius: 4px;
+                color: #f0f0f0;
+                padding: 5px;
+            }
+            QTextBrowser a {
+                color: #4a9cff;
+                text-decoration: none;
+            }
+            QTextBrowser a:hover {
+                text-decoration: underline;
             }
         """)
         
@@ -71,7 +91,7 @@ class AboutDialog(QDialog):
         title.setStyleSheet("""
             font-size: 24px;
             font-weight: bold;
-            color: #2c3e50;
+            color: #4a9cff;
             margin-bottom: 5px;
         """)
         title.setAlignment(Qt.AlignCenter)
@@ -80,7 +100,7 @@ class AboutDialog(QDialog):
         version_label = QLabel(f"Version: {version}")
         version_label.setStyleSheet("""
             font-size: 12px;
-            color: #7f8c8d;
+            color: #a0a0a0;
             margin-bottom: 15px;
         """)
         version_label.setAlignment(Qt.AlignCenter)
@@ -93,7 +113,7 @@ class AboutDialog(QDialog):
         )
         description.setStyleSheet("""
             font-size: 13px;
-            color: #34495e;
+            color: #e0e0e0;
             line-height: 1.5;
         """)
         description.setAlignment(Qt.AlignCenter)
@@ -106,7 +126,7 @@ class AboutDialog(QDialog):
         )
         info_label.setStyleSheet("""
             font-size: 11px;
-            color: #7f8c8d;
+            color: #a0a0a0;
             margin-top: 15px;
         """)
         info_label.setAlignment(Qt.AlignCenter)

@@ -5,22 +5,24 @@
 1. [Introduction](#introduction)
 2. [Installation](#installation)
 3. [Getting Started](#getting-started)
-4. [Main Interface](#main-interface)
+4. [User Interface](#user-interface)
 5. [Managing Passwords](#managing-passwords)
-   - [Adding a New Password](#adding-a-new-password)
-   - [Viewing a Password](#viewing-a-password)
-   - [Editing a Password](#editing-a-password)
-   - [Deleting a Password](#deleting-a-password)
+   - [Adding a New Password](#adding-passwords)
+   - [Viewing a Password](#viewing-passwords)
+   - [Editing a Password](#editing-passwords)
+   - [Deleting a Password](#deleting-passwords)
    - [Searching Passwords](#searching-passwords)
-6. [Categories and Tags](#categories-and-tags)
-7. [Import/Export](#importexport)
-8. [Password Generator](#password-generator)
-9. [Security Features](#security-features)
-10. [Backup and Restore](#backup-and-restore)
+   - [Organizing with Categories and Tags](#categories-and-tags)
+6. [Password Generator](#password-generator)
+7. [Security Features](#security-features)
+8. [Import/Export](#importexport)
+9. [Backup and Restore](#backup-and-restore)
+10. [Themes and Customization](#themes-and-customization)
 11. [Settings](#settings)
 12. [Troubleshooting](#troubleshooting)
 13. [Frequently Asked Questions](#frequently-asked-questions)
 14. [Getting Help](#getting-help)
+15. [Support the Project](#support-the-project)
 
 ## Introduction
 
@@ -28,16 +30,19 @@ The Password Manager is a secure, open-source application designed to help you s
 
 ### Key Features
 
-- 🔒 Strong encryption using AES-256
-- 🔑 Single master password protection
-- 📱 Cross-platform compatibility (Windows, macOS, Linux)
-- 🔄 Password generator with customizable options
-- 📂 Secure import/export functionality
-- 🔍 Powerful search and filtering
-- 🏷️ Categories and tags for organization
-- 📋 Clipboard management with auto-clear
-- 🔄 Automatic backups
-- 📊 Password strength analysis
+- 🔒 **Military-Grade Encryption**: AES-256 encryption for maximum security
+- 🔑 **Master Password Protection**: Single secure password to access all your credentials
+- 🌓 **Themes**: Light and dark mode with customizable appearance
+- 🔄 **Password Generator**: Create strong, random passwords with customizable options
+- 📋 **Clipboard Management**: Auto-clear clipboard after copying sensitive data
+- 🔍 **Advanced Search**: Quickly find credentials with powerful search and filtering
+- 🏷️ **Categories & Tags**: Organize passwords with custom categories and tags
+- 📂 **Import/Export**: Securely import from and export to various formats
+- 🔄 **Auto-Backup**: Automatic encrypted backups of your password database
+- 📊 **Password Strength Analysis**: Get insights into your password security
+- ⏱ **Auto-Lock**: Automatic locking after a period of inactivity
+- 🔗 **URL Launching**: Directly open websites from saved entries
+- 📱 **Cross-Platform**: Available on Windows, macOS, and Linux
 
 ## Installation
 
@@ -103,84 +108,47 @@ Visit our [GitHub Releases](https://github.com/Nsfr750/pass_mgr/releases) page t
    - If you forget your master password, you won't be able to recover your stored passwords
    - Consider using a password manager to store your master password securely
 
-## Main Interface
+## User Interface Overview {#user-interface}
 
-The main window is designed for easy navigation and quick access to all features:
+This section provides an overview of the main application interface and its components.
 
-1. **Menu Bar**: Access all application features
-   - **File**: Database operations, import/export, backup/restore, exit
-   - **Edit**: Copy, paste, delete, find
-   - **View**: Toggle interface elements, refresh view
-   - **Tools**: Password generator, settings, log viewer
-   - **Help**: User guide, about, check for updates
+### Main Window
 
-2. **Toolbar**: Quick access to common actions
-   - Add new entry
-   - Edit selected entry
-   - Delete selected entry
-   - Copy username/password
-   - Generate password
-   - Lock database
-
-3. **Navigation Panel**:
-   - Categories/tags filter
-   - Favorites
-   - Recently added
-   - Trash
-
-4. **Password List**:
-   - Displays your saved passwords in a sortable table
-   - Columns: Title, Username, URL, Last Modified
-   - Right-click for context menu
-
-5. **Search Bar**:
-   - Real-time search as you type
-   - Search in titles, usernames, URLs, and notes
-   - Advanced search with filters
-
-6. **Status Bar**:
-   - Number of entries
-   - Database status
-   - Last sync time
-   - Security indicators
+- **Menu Bar**: Access all application features and settings
+- **Toolbar**: Quick access to frequently used functions
+- **Password List**: Displays your saved password entries
+- **Search Bar**: Quickly find specific entries
+- **Category/Tag Filter**: Filter entries by category or tag
+- **Status Bar**: Shows application status and notifications
 
 ## Managing Passwords
 
-### Adding a New Password
+### Adding a New Password {#adding-passwords}
 
-1. Click the "+" button in the toolbar or press `Ctrl+N`
-2. Fill in the form:
-   - **Title**: Name of the website/service (required)
-   - **Username/Email**: Your login (required)
-   - **Password**: Enter or generate a password (required)
-   - **URL**: Website URL (optional, click to open in browser)
-   - **Notes**: Additional information (optional)
-   - **Category**: Organize by type (e.g., Work, Personal, Finance)
-   - **Tags**: Add multiple tags for better organization
-   - **Expiration**: Set password expiration date (optional)
-   - **Favorite**: Mark as favorite for quick access
+1. Click the "Add New" button in the toolbar or press `Ctrl+N`
+2. Fill in the required fields (Title, Username, Password)
+3. Optionally add a URL, notes, or tags
+4. Click "Save" or press `Ctrl+S` to store the entry
 
-3. Click "Save" or press `Ctrl+S` to store the entry
-
-### Viewing a Password
+### Viewing a Password {#viewing-passwords}
 
 1. Select an entry from the list
-2. Double-click or press `Enter` to view details
-3. Click the eye icon to reveal the password
-4. Use the copy buttons to copy username or password to clipboard
+2. Click the "Show Password" button (eye icon)
+3. The password will be revealed temporarily
+4. Click the "Copy" button to copy the password to clipboard
 
-### Editing a Password
+### Editing a Password {#editing-passwords}
 
-1. Select the password entry
-2. Click the "Edit" button or press `Ctrl+E`
+1. Select the entry you want to edit
+2. Click the "Edit" button or double-click the entry
 3. Make your changes
-4. Click "Save" or press `Ctrl+S` to update
+4. Click "Save" to update the entry
 
-### Deleting a Password
+### Deleting a Password {#deleting-passwords}
 
-1. Select one or more entries
-2. Click the "Delete" button or press `Delete`
-3. Confirm the deletion in the dialog box
+1. Select the entry you want to delete
+2. Click the "Delete" button or press `Delete` key
+3. Confirm the deletion in the confirmation dialog box
 4. **Note**: Deleted items go to Trash and can be restored
 
 ### Searching Passwords
@@ -459,24 +427,27 @@ A: Without the master password, your data cannot be recovered. There is no backd
 ### Documentation
 
 - [User Guide](User_guide.md) (this document)
-- [Project Structure](struct.md)
-- [API Reference](api.md) (for developers)
 
-### Support Channels
+If you find this project useful, please consider supporting its development:
 
-- **GitHub Issues**: [https://github.com/Nsfr750/pass_mgr/issues](https://github.com/Nsfr750/pass_mgr/issues)
-- **Discord**: [https://discord.gg/ryqNeuRYjD](https://discord.gg/ryqNeuRYjD)
-- **Email**: nsfr750@yandex.com
+- [Become a GitHub Sponsor](https://github.com/sponsors/Nsfr750)
+- [Support on Patreon](https://www.patreon.com/Nsfr750)
+- [Donate via PayPal](https://paypal.me/3dmega)
+- Monero: `47Jc6MC47WJVFhiQFYwHyBNQP5BEsjUPG6tc8R37FwcTY8K5Y3LvFzveSXoGiaDQSxDrnCUBJ5WBj6Fgmsfix8VPD4w3gXF`
 
-### Contributing
+Your support helps ensure the continued development and maintenance of this project.
+
+## Contributing
 
 We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for more information.
 
-### License
+## License and Support
 
 This project is licensed under the GPLv3 License - see the [LICENSE](../LICENSE) file for details.
 
-### Donations
+### Supporting the Project
+
+Your support helps ensure the continued development and maintenance of this project.
 
 If you find this project useful, please consider supporting its development:
 
