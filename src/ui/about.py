@@ -4,7 +4,7 @@ About dialog for the Password Manager application.
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QWidget
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QPixmap, QIcon
 import sys
 import os
@@ -29,36 +29,102 @@ class AboutDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("About Password Manager")
         self.setModal(True)
-        self.setFixedSize(400, 300)
+        self.setFixedSize(500, 500)
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #f5f5f5;
+            }
+            QLabel {
+                color: #333333;
+            }
+            QPushButton {
+                padding: 5px 15px;
+                border: 1px solid #cccccc;
+                border-radius: 4px;
+                background-color: #f0f0f0;
+            }
+            QPushButton:hover {
+                background-color: #e0e0e0;
+            }
+        """)
         
-        # Set up the layout
-        layout = QVBoxLayout()
-        layout.setAlignment(Qt.AlignCenter)
-        layout.setSpacing(20)
+        # Set up the main layout
+        main_layout = QVBoxLayout()
+        main_layout.setAlignment(Qt.AlignCenter)
+        main_layout.setSpacing(15)
+        main_layout.setContentsMargins(30, 30, 30, 20)
         
-        # Add application icon/title
+        # Add logo
+        logo_path = Path(__file__).parent.parent.parent / "assets" / "logo.png"
+        if logo_path.exists():
+            logo_label = QLabel()
+            pixmap = QPixmap(str(logo_path))
+            # Scale logo to fit but maintain aspect ratio
+            pixmap = pixmap.scaled(128, 128, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            logo_label.setPixmap(pixmap)
+            logo_label.setAlignment(Qt.AlignCenter)
+            logo_label.setStyleSheet("margin-bottom: 10px;")
+            main_layout.addWidget(logo_label)
+        
+        # Add application title
         title = QLabel("Password Manager")
-        title.setStyleSheet("font-size: 18px; font-weight: bold;")
+        title.setStyleSheet("""
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        """)
         title.setAlignment(Qt.AlignCenter)
         
         # Add version
         version_label = QLabel(f"Version: {version}")
+        version_label.setStyleSheet("""
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-bottom: 15px;
+        """)
         version_label.setAlignment(Qt.AlignCenter)
         
         # Add description
         description = QLabel(
-            "A secure password manager with import/export capabilities.\n\n"
+            "A secure and user-friendly password manager with import/export capabilities.\n"
+            "Store, manage, and generate strong passwords with ease.\n\n"
             "© 2025 Nsfr750 - All rights reserved"
         )
+        description.setStyleSheet("""
+            font-size: 13px;
+            color: #34495e;
+            line-height: 1.5;
+        """)
         description.setAlignment(Qt.AlignCenter)
         description.setWordWrap(True)
         
+        # Add additional info
+        info_label = QLabel(
+            "For more information, visit:\n"
+            "https://github.com/Nsfr750/pass_mgr"
+        )
+        info_label.setStyleSheet("""
+            font-size: 11px;
+            color: #7f8c8d;
+            margin-top: 15px;
+        """)
+        info_label.setAlignment(Qt.AlignCenter)
+        info_label.setWordWrap(True)
+        info_label.setOpenExternalLinks(True)
+        info_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        
         # Add buttons
         button_box = QHBoxLayout()
+        button_box.setSpacing(10)
         button_box.addStretch()
         
         # GitHub button
-        self.github_btn = QPushButton("GitHub")
+        self.github_btn = QPushButton("GitHub Repository")
+        self.github_btn.setIcon(self.style().standardIcon(
+            getattr(self.style().StandardPixmap, 'SP_ComputerIcon', None) or 
+            self.style().StandardPixmap.SP_DesktopIcon
+        ))
         self.github_btn.clicked.connect(self.open_github)
         button_box.addWidget(self.github_btn)
         
@@ -72,19 +138,20 @@ class AboutDialog(QDialog):
         button_widget.setLayout(button_box)
         
         # Add all widgets to the main layout
-        layout.addStretch()
-        layout.addWidget(title)
-        layout.addWidget(version_label)
-        layout.addWidget(description)
-        layout.addStretch()
-        layout.addWidget(button_widget)
+        main_layout.addWidget(title)
+        main_layout.addWidget(version_label)
+        main_layout.addWidget(description)
+        main_layout.addWidget(info_label)
+        main_layout.addStretch()
+        main_layout.addWidget(button_widget)
         
-        self.setLayout(layout)
+        # Set the main layout
+        self.setLayout(main_layout)
     
     def open_github(self):
         """Open the GitHub repository in the default browser."""
         import webbrowser
-        webbrowser.open("https://github.com/Nsfr750/password_manager")
+        webbrowser.open("https://github.com/Nsfr750/pass_mgr")
 
 
 def show_about_dialog(parent=None):

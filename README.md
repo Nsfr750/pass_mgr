@@ -1,3 +1,11 @@
+# ![Logo](assets/logo.png)
+
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![GitHub release](https://img.shields.io/github/v/release/Nsfr750/pass_mgr)](https://github.com/Nsfr750/pass_mgr/releases)
+[![Discord](https://img.shields.io/discord/1234567890123456789?label=Discord&logo=discord)](https://discord.gg/ryqNeuRYjD)
+
 # Password Manager
 
 A secure password manager with import capabilities from various sources.

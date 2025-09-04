@@ -1,12 +1,33 @@
 """
 Sponsor dialog for the Password Manager application.
 """
+import qrcode
+from wand.image import Image as WandImage
+from wand.color import Color
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTextEdit, QMessageBox, QApplication
+    QDialog, 
+    QVBoxLayout, 
+    QHBoxLayout, 
+    QLabel, 
+    QPushButton,
+    QTextEdit, 
+    QMessageBox, 
+    QApplication, 
+    QGridLayout, 
+    QWidget, 
+    QTextBrowser
 )
-from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QDesktopServices, QPixmap, QIcon
+from PySide6.QtCore import (
+    Qt, 
+    QUrl, 
+    QCoreApplication
+)
+from PySide6.QtGui import (
+    QDesktopServices, 
+    QPixmap, 
+    QIcon, 
+    QImage
+)
 
 class SponsorDialog(QDialog):
     """Dialog to show sponsorship information and options."""
@@ -153,21 +174,40 @@ class SponsorDialog(QDialog):
                 box_size=10,
                 border=4,
             )
-            qr.add_data(f"monero:{monero_address}")
+            # Use Monero payment URI format
+            qr.add_data(f"monero:{monero_address}?tx_amount=0&recipient_name=PasswordManager")
             qr.make(fit=True)
 
-            # Generate QR code image
-            qr_img = qr.make_image(
-                fill_color="#4a9cff", back_color="#2a2a2a"
-            )  # Changed to solid background
+            # Get theme colors
+            bg_color = self.palette().color(self.backgroundRole()).name()
+            fg_color = self.palette().color(self.foregroundRole()).name()
+            
+            if bg_color == fg_color:  # Fallback if colors are the same
+                bg_color = "#2a2a2a"
+                fg_color = "#4a9cff"
 
-            # Convert to QPixmap directly using PIL
-            qr_img = qr_img.convert("RGBA")
-            data = qr_img.tobytes("raw", "RGBA")
-            qimage = QImage(
-                data, qr_img.size[0], qr_img.size[1], QImage.Format.Format_RGBA8888
+            # Generate QR code image with theme colors
+            qr_img = qr.make_image(
+                fill_color=fg_color,
+                back_color=bg_color
             )
-            pixmap = QPixmap.fromImage(qimage)
+            
+            # Convert to bytes and create Wand image
+            with WandImage(blob=qr_img.tobytes(), format='PNG') as img:
+                # Convert to RGBA if not already
+                if img.alpha_channel is False:
+                    img.alpha_channel = 'set'
+                
+                # Convert to QImage via bytes
+                img.format = 'RGBA'
+                img_data = img.make_blob('RGBA')
+                qimage = QImage(
+                    img_data, 
+                    img.width, 
+                    img.height, 
+                    QImage.Format.Format_RGBA8888
+                )
+                pixmap = QPixmap.fromImage(qimage)
 
             # Scale the pixmap
             pixmap = pixmap.scaled(
@@ -181,23 +221,26 @@ class SponsorDialog(QDialog):
             self.qr_label = QLabel()
             self.qr_label.setPixmap(pixmap)
             self.qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.qr_label.setToolTip(self.translate("scan_to_donate_xmr"))
+            self.qr_label.setToolTip("Scan to donate XMR")
 
             # Add some styling to make it more visible
             self.qr_label.setStyleSheet(
-                """
-                QLabel {
-                    background-color: #2a2a2a;
+                f"""
+                QLabel {{
+                    background-color: {bg_color};
                     border: 1px solid #444;
                     border-radius: 5px;
                     padding: 10px;
-                }
+                }}
             """
             )
 
+        except ImportError:
+            self.qr_label = QLabel("Error: qrcode or Wand not installed")
+            self.qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.qr_label.setStyleSheet("color: #ff4444; font-weight: bold;")
         except Exception as e:
-            print(f"Error generating QR code: {e}")
-            self.qr_label = QLabel(self.translate("qr_generation_failed"))
+            self.qr_label = QLabel(f"Error generating QR code: {str(e)}")
             self.qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.qr_label.setStyleSheet("color: #ff4444; font-weight: bold;")
 

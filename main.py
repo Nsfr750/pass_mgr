@@ -12,6 +12,7 @@ sys.path.append(str(Path(__file__).parent / "src"))
 
 from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtCore import QSettings, QCoreApplication
+from PySide6.QtGui import QIcon
 
 from src.core.config import ensure_data_dir
 from src.core.database import DatabaseManager
@@ -26,6 +27,14 @@ def main():
         app = QApplication(sys.argv)
         QCoreApplication.setApplicationName("PasswordManager")
         QCoreApplication.setOrganizationName("Nsfr750")
+        
+        # Set application icon
+        icon_path = Path(__file__).parent / "assets" / "logo.png"
+        if icon_path.exists():
+            app_icon = QIcon(str(icon_path))
+            app.setWindowIcon(app_icon)
+            if hasattr(QApplication, 'setWindowIcon'):
+                QApplication.setWindowIcon(app_icon)
         
         # Set up settings
         settings = QSettings("Nsfr750", "PasswordManager")
