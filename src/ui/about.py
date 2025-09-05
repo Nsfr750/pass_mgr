@@ -12,7 +12,7 @@ from pathlib import Path
 
 # Import version information
 try:
-    from src.core.version import get_version, get_version_history
+    from ..core.version import get_version, get_version_history
 except ImportError:
     # Fallback if version module is not available
     version = "1.0.0"

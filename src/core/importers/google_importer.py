@@ -7,8 +7,8 @@ import re
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
-from src.core.models import PasswordEntry, ImportStats
-from src.core.importers.base_importer import BaseImporter
+from ..models import PasswordEntry, ImportStats
+from .base_importer import BaseImporter
 
 logger = logging.getLogger(__name__)
 

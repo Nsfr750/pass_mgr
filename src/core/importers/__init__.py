@@ -3,23 +3,24 @@ import sys
 from typing import List, Dict, Any
 from .base_importer import BaseImporter
 from .lastpass_importer import LastPassImporter
-from .chromium import ChromiumImporter
+from .chrome_importer import ChromeImporter
 from .firefox_importer import FirefoxImporter
 from .google_importer import GoogleImporter
 from .onepassword_importer import OnePasswordImporter
 from .bitwarden_importer import BitwardenImporter
 from .safari_importer import SafariImporter
+from .edge_importer import EdgeImporter
+from .opera_importer import OperaImporter
 
 # List of available importers
 AVAILABLE_IMPORT_OPTIONS = [
     # Browser importers
     {
-        'id': 'chromium',
-        'name': 'Chromium Browsers',
-        'description': 'Import from Chrome, Edge, Brave, Vivaldi, etc.',
-        'importer': ChromiumImporter,
-        'type': 'browser',
-        'browsers': []  # Will be populated with detect_available_browsers()
+        'id': 'chrome',
+        'name': 'Google Chrome',
+        'description': 'Import from Google Chrome browser',
+        'importer': ChromeImporter,
+        'type': 'browser'
     },
     {
         'id': 'firefox',
@@ -27,6 +28,28 @@ AVAILABLE_IMPORT_OPTIONS = [
         'description': 'Import from Firefox browser',
         'importer': FirefoxImporter,
         'type': 'browser'
+    },
+    {
+        'id': 'edge',
+        'name': 'Microsoft Edge',
+        'description': 'Import from Microsoft Edge browser',
+        'importer': EdgeImporter,
+        'type': 'browser'
+    },
+    {
+        'id': 'opera',
+        'name': 'Opera',
+        'description': 'Import from Opera browser',
+        'importer': OperaImporter,
+        'type': 'browser'
+    },
+    {
+        'id': 'safari',
+        'name': 'Safari',
+        'description': 'Import from Safari browser (macOS only)',
+        'importer': SafariImporter,
+        'type': 'browser',
+        'platform': 'darwin'
     },
     # Password manager importers
     {
@@ -60,54 +83,11 @@ AVAILABLE_IMPORT_OPTIONS = [
         'description': 'Import from Google Account',
         'importer': GoogleImporter,
         'type': 'service'
-    },
-    {
-        'id': 'safari',
-        'name': 'Apple Safari',
-        'description': 'Import from Safari browser (macOS only)',
-        'importer': SafariImporter,
-        'type': 'browser',
-        'platform': 'darwin'
     }
 ]
 
 # Initialize the list of available importers
 AVAILABLE_IMPORTERS = []
-
-# Add Chromium browsers
-try:
-    from .chromium import ChromiumImporter
-    chromium_browsers = ChromiumImporter.detect_available_browsers()
-    
-    # Update the Chromium import option with detected browsers
-    for option in AVAILABLE_IMPORT_OPTIONS:
-        if option['id'] == 'chromium':
-            option['browsers'] = chromium_browsers
-            break
-    
-    # Add importers for each detected browser
-    for browser in chromium_browsers:
-        AVAILABLE_IMPORTERS.append(ChromiumImporter(
-            browser=browser['browser'],
-            profile=browser['profile']
-        ))
-except Exception as e:
-    print(f"Warning: Could not initialize Chromium importers: {e}")
-
-# Add other importers
-for option in AVAILABLE_IMPORT_OPTIONS:
-    if option['id'] != 'chromium':  # Already handled above
-        try:
-            # Skip platform-specific importers if not on the right platform
-            if option.get('platform') and option['platform'] != sys.platform:
-                continue
-                
-            # Add the importer
-            if option['type'] == 'browser':
-                AVAILABLE_IMPORTERS.append(option['importer']())
-            # File-based importers are added when needed
-        except Exception as e:
-            print(f"Warning: Could not initialize {option['name']} importer: {e}")
 
 def get_importers() -> List[BaseImporter]:
     """Get all available importers.
@@ -115,6 +95,17 @@ def get_importers() -> List[BaseImporter]:
     Returns:
         List[BaseImporter]: List of all available importer instances
     """
+    if not AVAILABLE_IMPORTERS:
+        for importer in AVAILABLE_IMPORT_OPTIONS:
+            try:
+                if importer['type'] == 'browser':
+                    instance = importer['importer']()
+                    AVAILABLE_IMPORTERS.append(instance)
+                else:
+                    AVAILABLE_IMPORTERS.append(importer['importer']())
+            except Exception as e:
+                logger.error(f"Failed to initialize {importer['name']} importer: {e}")
+    
     return AVAILABLE_IMPORTERS
 
 

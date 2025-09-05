@@ -5,7 +5,7 @@ import logging
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from ...models import PasswordEntry
+from ..models import PasswordEntry
 from .password_analyzer import PasswordAnalyzer, PasswordAnalysisResult
 from .breach_monitor import BreachMonitor
 

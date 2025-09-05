@@ -10,7 +10,7 @@ from PySide6.QtGui import QIcon
 from pathlib import Path
 import logging
 
-from src.core.settings import settings_manager
+from ..core.settings import settings_manager
 
 logger = logging.getLogger(__name__)
 

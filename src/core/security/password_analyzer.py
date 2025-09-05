@@ -6,7 +6,7 @@ import re
 import string
 from datetime import datetime, timedelta
 
-from ...models import PasswordEntry
+from ..models import PasswordEntry
 
 @dataclass
 class PasswordAnalysisResult:

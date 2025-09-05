@@ -12,8 +12,8 @@ from cryptography.hazmat.primitives import padding
 from base64 import b64decode, b64encode
 import binascii
 
-from src.core.importers.base_importer import BaseImporter
-from src.core.models import PasswordEntry, ImportStats
+from .base_importer import BaseImporter
+from ..models import PasswordEntry, ImportStats
 
 class OnePasswordImporter(BaseImporter):
     """Importer for 1Password exports."""

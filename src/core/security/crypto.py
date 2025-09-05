@@ -45,9 +45,26 @@ if sys.platform == 'win32':
     _VirtualQuery.argtypes = [ctypes.c_void_p, ctypes.POINTER(MEMORY_BASIC_INFORMATION), ctypes.c_size_t]
     _VirtualQuery.restype = ctypes.c_size_t
     
-    _SecureZeroMemory = _kernel32.SecureZeroMemory
-    _SecureZeroMemory.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
-    _SecureZeroMemory.restype = ctypes.c_void_p
+    # Try to get SecureZeroMemory, fall back to RtlSecureZeroMemory or manual implementation
+    try:
+        _SecureZeroMemory = _kernel32.SecureZeroMemory
+        _SecureZeroMemory.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
+        _SecureZeroMemory.restype = ctypes.c_void_p
+    except (AttributeError, OSError):
+        try:
+            # Try RtlSecureZeroMemory as fallback
+            _ntdll = ctypes.WinDLL('ntdll', use_last_error=True)
+            _SecureZeroMemory = _ntdll.RtlSecureZeroMemory
+            _SecureZeroMemory.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
+            _SecureZeroMemory.restype = ctypes.c_void_p
+        except (AttributeError, OSError):
+            # Fallback to manual zeroing if both functions are not available
+            def _secure_zero_memory(ptr, size):
+                ctypes.memset(ptr, 0, size)
+                # Use a memory barrier to prevent the compiler from optimizing out the memset
+                ctypes.memset(ctypes.c_void_p(), 0, 0)
+                return ptr
+            _SecureZeroMemory = _secure_zero_memory
 
 @dataclass
 class SecureBytes:

@@ -11,8 +11,8 @@ from typing import List, Optional, Dict, Any
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 
-from src.core.models import PasswordEntry, ImportStats
-from src.core.importers.base_importer import BaseImporter
+from ..models import PasswordEntry, ImportStats
+from .base_importer import BaseImporter
 
 logger = logging.getLogger(__name__)
 

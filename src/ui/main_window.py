@@ -22,8 +22,8 @@ from .dashboard import PasswordHealthWidget, PasswordHealthMetrics
 from pathlib import Path
 import logging
 
-from src.core.models import PasswordEntry
-from src.core.importers import get_importers, get_importers_for_file
+from ..core.models import PasswordEntry
+from ..core.importers import get_importers, get_importers_for_file
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +156,7 @@ class MainWindow(QMainWindow):
         self.dashboard_visible = False
         
         # Initialize the main window with version
-        from src.core.version import get_version
+        from ..core.version import get_version
         self.setWindowTitle(f"Password Manager v{get_version()}")
         self.setMinimumSize(1200, 700)
         
@@ -474,53 +474,53 @@ class MainWindow(QMainWindow):
     
     def import_from_lastpass(self):
         """Import passwords from LastPass."""
-        from src.core.importers.lastpass_importer import LastPassImporter
+        from ..core.importers.lastpass_importer import LastPassImporter
         self._show_import_dialog(LastPassImporter())
     
     def import_from_chrome(self):
         """Import passwords from Chrome."""
-        from src.core.importers.chrome_importer import ChromeImporter
+        from ..core.importers.chrome_importer import ChromeImporter
         self._show_import_dialog(ChromeImporter())
     
     def import_from_firefox(self):
         """Import passwords from Firefox."""
-        from src.core.importers.firefox_importer import FirefoxImporter
+        from ..core.importers.firefox_importer import FirefoxImporter
         self._show_import_dialog(FirefoxImporter())
     
     def import_from_google(self):
         """Import passwords from Google."""
-        from src.core.importers.google_importer import GoogleImporter
+        from ..core.importers.google_importer import GoogleImporter
         self._show_import_dialog(GoogleImporter())
         
     def import_from_1password(self):
         """Import passwords from 1Password export."""
-        from src.core.importers.onepassword_importer import OnePasswordImporter
+        from ..core.importers.onepassword_importer import OnePasswordImporter
         self._show_import_dialog(OnePasswordImporter())
         
     def import_from_bitwarden(self):
         """Import passwords from Bitwarden export."""
-        from src.core.importers.bitwarden_importer import BitwardenImporter
+        from ..core.importers.bitwarden_importer import BitwardenImporter
         self._show_import_dialog(BitwardenImporter())
         
     def import_from_opera(self):
         """Import passwords from Opera browser."""
-        from src.core.importers.opera_importer import OperaImporter
+        from ..core.importers.opera_importer import OperaImporter
         self._show_import_dialog(OperaImporter())
         
     def import_from_edge(self):
         """Import passwords from Microsoft Edge browser."""
-        from src.core.importers.edge_importer import EdgeImporter
+        from ..core.importers.edge_importer import EdgeImporter
         self._show_import_dialog(EdgeImporter())
         
     def import_from_safari(self):
         """Import passwords from Safari browser (macOS only)."""
-        from src.core.importers.safari_importer import SafariImporter
+        from ..core.importers.safari_importer import SafariImporter
         self._show_import_dialog(SafariImporter())
         
     def create_backup(self):
         """Create an encrypted backup of the database."""
-        from src.core.backup import BackupManager
-        from src.ui.password_dialog import PasswordDialog
+        from ..core.backup import BackupManager
+        from .password_dialog import PasswordDialog
         
         # Ask for backup password
         password = PasswordDialog.get_password_dialog(
@@ -551,8 +551,8 @@ class MainWindow(QMainWindow):
     
     def restore_backup(self):
         """Restore database from an encrypted backup."""
-        from src.core.backup import BackupManager
-        from src.ui.password_dialog import PasswordDialog
+        from ..core.backup import BackupManager
+        from .password_dialog import PasswordDialog
         
         # Get list of available backups
         backup_manager = BackupManager(self.db.db_path)

@@ -10,7 +10,7 @@ import secrets
 import string
 from datetime import datetime
 
-from src.core.models import PasswordEntry
+from ..core.models import PasswordEntry
 
 class PasswordGeneratorDialog(QDialog):
     """Dialog for generating secure passwords."""
