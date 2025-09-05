@@ -1,0 +1,9 @@
+{
+  "name": "com.passmgr.extension",
+  "description": "Native messaging host for Password Manager",
+  "path": "C:\\Program Files\\Password Manager\\browser-host.exe",
+  "type": "stdio",
+  "allowed_extensions": [
+    "password-manager@example.com"
+  ]
+}

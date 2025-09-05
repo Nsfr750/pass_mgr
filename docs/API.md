@@ -7,9 +7,13 @@
    - [Database](#database)
    - [Security](#security)
    - [Models](#models)
-4. [UI Components](#ui-components)
-5. [Utilities](#utilities)
-6. [Error Handling](#error-handling)
+4. [Browser Extension API](#browser-extension-api)
+   - [Native Messaging](#native-messaging)
+   - [Message Format](#message-format)
+   - [Authentication](#extension-authentication)
+5. [UI Components](#ui-components)
+6. [Utilities](#utilities)
+7. [Error Handling](#error-handling)
 
 ## Introduction
 
@@ -54,18 +58,165 @@ Handles password hashing and verification.
 ### Models
 
 #### `models.PasswordEntry`
-Represents a password entry.
+Represents a password entry in the database.
 
 **Attributes:**
-- `id: int`
-- `title: str`
-- `username: str`
-- `password: str` (encrypted)
-- `url: str`
-- `notes: str`
-- `tags: List[str]`
-- `created_at: datetime`
-- `updated_at: datetime`
+- `id: int`: Unique identifier
+- `title: str`: Entry title/name
+- `username: str`: Username/email
+- `password: str`: Encrypted password
+- `url: str`: Associated URL
+- `notes: str`: Additional notes
+- `category: str`: Category name
+- `tags: List[str]`: List of tags
+- `created_at: datetime`: Creation timestamp
+- `updated_at: datetime`: Last update timestamp
+
+## Browser Extension API
+
+The browser extension communicates with the main application using a secure native messaging protocol. This allows the extension to securely access and update password data while keeping sensitive operations within the main application.
+
+### Native Messaging
+
+The native messaging host is a small executable that acts as a bridge between the browser extension and the main application. It's installed on the user's system and handles secure communication.
+
+#### Message Format
+
+All messages are JSON-encoded strings with the following structure:
+
+```json
+{
+  "type": "message_type",
+  "requestId": "unique_request_id",
+  "payload": {}
+}
+```
+
+#### Authentication
+
+1. **Handshake**:
+   - The extension sends a handshake request with its public key
+   - The application responds with an encrypted session token
+
+2. **Message Encryption**:
+   - All subsequent messages are encrypted using AES-256-GCM
+   - The encryption key is derived from a shared secret
+
+### Message Types
+
+#### `get_credentials`
+Request credentials for a specific domain.
+
+**Request:**
+```json
+{
+  "type": "get_credentials",
+  "requestId": "123e4567-e89b-12d3-a456-426614174000",
+  "payload": {
+    "url": "https://example.com/login",
+    "fields": ["username", "password"]
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "type": "credentials",
+  "requestId": "123e4567-e89b-12d3-a456-426614174000",
+  "payload": {
+    "credentials": [
+      {
+        "id": "entry_123",
+        "title": "Example Account",
+        "username": "user@example.com",
+        "password": "decrypted_password",
+        "url": "https://example.com"
+      }
+    ]
+  }
+}
+```
+
+#### `save_credentials`
+Save new or updated credentials.
+
+**Request:**
+```json
+{
+  "type": "save_credentials",
+  "requestId": "123e4567-e89b-12d3-a456-426614174001",
+  "payload": {
+    "url": "https://example.com",
+    "title": "Example Account",
+    "username": "user@example.com",
+    "password": "new_password"
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "type": "save_result",
+  "requestId": "123e4567-e89b-12d3-a456-426614174001",
+  "payload": {
+    "success": true,
+    "id": "entry_123"
+  }
+}
+```
+
+#### `generate_password`
+Generate a strong password.
+
+**Request:**
+```json
+{
+  "type": "generate_password",
+  "requestId": "123e4567-e89b-12d3-a456-426614174002",
+  "payload": {
+    "length": 16,
+    "include_uppercase": true,
+    "include_numbers": true,
+    "include_special": true
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "type": "generated_password",
+  "requestId": "123e4567-e89b-12d3-a456-426614174002",
+  "payload": {
+    "password": "xK8#pL2$qR9&mN5!"
+  }
+}
+```
+
+### Error Handling
+
+Errors are returned in the following format:
+
+```json
+{
+  "type": "error",
+  "requestId": "request_id",
+  "error": {
+    "code": "error_code",
+    "message": "Human-readable error message",
+    "details": {}
+  }
+}
+```
+
+#### Common Error Codes
+- `auth_required`: Authentication is required
+- `invalid_request`: Malformed or invalid request
+- "not_found": Requested resource not found
+- "permission_denied": Insufficient permissions
+- "internal_error": Internal server error
 
 ## UI Components
 

@@ -39,10 +39,18 @@ The Password Manager is a secure, open-source application designed to help you s
 - 🏷️ **Categories & Tags**: Organize passwords with custom categories and tags
 - 📂 **Import/Export**: Securely import from and export to various formats
 - 🔄 **Auto-Backup**: Automatic encrypted backups of your password database
-- 📊 **Password Strength Analysis**: Get insights into your password security
+- 📊 **Password Health Dashboard**: Visual insights into your password security
+- 🔄 **View Toggle**: Switch between grid and list views for better organization
+- 🔍 **Duplicate Detection**: Automatically find and manage duplicate passwords
+- ⚡ **Password Strength Analysis**: Detailed strength assessment of all passwords
+- 🚨 **Breach Monitoring**: Get alerts if your passwords appear in data breaches
+- 🔍 **Password Audit**: Comprehensive security audit of your password vault
+- 🤝 **Secure Sharing**: Share passwords securely with other users (end-to-end encrypted)
 - ⏱ **Auto-Lock**: Automatic locking after a period of inactivity
 - 🔗 **URL Launching**: Directly open websites from saved entries
+- 🌐 **Browser Extension**: Auto-fill and save passwords in your browser
 - 📱 **Cross-Platform**: Available on Windows, macOS, and Linux
+- 🔄 **Chromium Importer**: Easily import passwords from Chromium-based browsers
 
 ## Installation
 
@@ -205,6 +213,70 @@ Tags provide additional organization beyond categories:
    - Click on a tag in the navigation panel
    - Or use the search filter
 
+## Browser Extension
+
+The Password Manager includes a browser extension that seamlessly integrates with your web browser to provide auto-fill and save functionality for login forms.
+
+### Features
+
+- **Auto-fill login forms** with a single click
+- **Save new logins** with one click
+- **Secure communication** with the main application
+- **Cross-browser support** (Chrome, Firefox, Opera, Edge)
+- **Native integration** for maximum security
+
+### Installation
+
+1. **Install the extension** in your browser:
+   - **Chrome/Edge**:
+     1. Go to `chrome://extensions/`
+     2. Enable "Developer mode" (toggle in top-right)
+     3. Click "Load unpacked" and select the `browser-extension/build/chrome` directory
+   - **Firefox**:
+     1. Go to `about:debugging#/runtime/this-firefox`
+     2. Click "Load Temporary Add-on"
+     3. Select the `manifest.json` file from `browser-extension/build/firefox`
+   - **Opera**:
+     1. Go to `opera://extensions/`
+     2. Enable "Developer mode" (toggle in top-left)
+     3. Click "Load unpacked" and select the `browser-extension/build/opera` directory
+
+2. **Install the Native Messaging Host**:
+   ```powershell
+   cd browser-extension
+   .\install-native-host.ps1
+   ```
+
+### Using the Extension
+
+1. **Auto-fill Login**:
+   - Navigate to a login page
+   - Click the Password Manager icon in your browser's toolbar
+   - Select the matching login from the list
+   - The form will be filled automatically
+
+2. **Save New Login**:
+   - Log in to a website
+   - Click the Password Manager icon
+   - Click "Save this login"
+   - Verify the details and click "Save"
+
+3. **Generate Strong Passwords**:
+   - Right-click on a password field
+   - Select "Generate Password"
+   - Choose password options and click "Use Password"
+
+### Troubleshooting
+
+- **Extension not connecting**:
+  - Ensure the main Password Manager application is running
+  - Verify the native host is installed correctly
+  - Check browser console for error messages (F12 > Console)
+
+- **Auto-fill not working**:
+  - Make sure the website isn't using non-standard form fields
+  - Try manually selecting the login from the extension popup
+
 ## Import/Export
 
 ### Supported Formats
@@ -217,17 +289,30 @@ Tags provide additional organization beyond categories:
 
 ### Importing Passwords
 
-1. Go to **File > Import**
-2. Select the file format
-3. Choose the file to import
-4. Map the fields if necessary
-5. Choose import options:
-   - Import to a specific category
-   - Overwrite existing entries
-   - Skip duplicates
-6. Click "Import"
+You can import passwords from various sources:
+
+1. **From CSV/JSON**:
+   - Go to **File > Import**
+   - Select the file format
+   - Map the fields to match the application's format
+   - Click "Import"
+
+2. **From Other Password Managers**:
+   - Supported formats:
+     - LastPass
+     - 1Password
+     - Bitwarden
+     - Chrome/Chromium (see below)
+
+3. **From Chromium Browsers**:
+   - Click **File > Import > From Chromium**
+   - Select the browser (Chrome, Edge, Brave, etc.)
+   - The application will automatically detect and import your saved passwords
+   - Review and confirm the import
 
 ### Exporting Passwords
+
+To export your password database:
 
 1. Go to **File > Export**
 2. Select the file format
@@ -238,6 +323,118 @@ Tags provide additional organization beyond categories:
 4. Select which fields to include
 5. Choose a save location
 6. Click "Export"
+
+## Security Features
+
+### Duplicate Password Detection
+
+The application automatically detects duplicate passwords across your accounts:
+
+1. **Viewing Duplicates**:
+   - Go to **Tools > Security Audit > Show Duplicate Passwords**
+   - A list of accounts sharing the same password will be displayed
+
+2. **Resolving Duplicates**:
+   - Use the "Generate New Password" option to create unique passwords
+   - Update the affected accounts
+   - The dashboard will reflect the improved security score
+
+### Password Strength Analysis
+
+Get detailed insights into your password strength:
+
+1. **Strength Indicators**:
+   - Each password is rated from Weak to Very Strong
+   - Color-coded indicators show strength at a glance
+
+2. **Improving Weak Passwords**:
+   - Right-click on any entry and select "Generate Strong Password"
+   - The strength analysis updates in real-time
+
+### Breach Monitoring
+
+Stay protected with automatic breach monitoring:
+
+1. **How It Works**:
+   - The application checks your passwords against known data breaches
+   - You'll receive notifications if any of your passwords are compromised
+
+2. **Resolving Breaches**:
+   - Go to **Tools > Security Audit > Breached Passwords**
+   - Follow the on-screen instructions to update compromised passwords
+
+### Password Audit Tool
+
+Run comprehensive security audits:
+
+1. **Starting an Audit**:
+   - Go to **Tools > Security Audit > Run Full Audit**
+   - The tool will check for:
+     - Weak passwords
+     - Duplicate passwords
+     - Old passwords
+     - Compromised credentials
+
+2. **Reviewing Results**:
+   - Each issue is categorized by severity
+   - Follow the recommendations to improve your security
+
+### Secure Password Sharing
+
+Share passwords securely with trusted contacts:
+
+1. **Sharing a Password**:
+   - Right-click on an entry and select "Share"
+   - Enter the recipient's email
+   - Set an expiration date (optional)
+   - Click "Share Securely"
+
+2. **Receiving Shared Passwords**:
+   - You'll receive an email with a secure link
+   - The password is decrypted only on your device
+   - The shared access can be revoked at any time
+
+## Dashboard and View Options
+
+### Password Health Dashboard
+
+The Password Health Dashboard provides a visual overview of your password security:
+
+1. **Accessing the Dashboard**:
+   - Click the "Dashboard" button in the toolbar
+   - The dashboard will open in a separate window
+
+2. **Dashboard Features**:
+   - **Health Score**: Overall password security score (0-100)
+   - **Password Analysis**:
+     - Total number of passwords
+     - Number of weak passwords
+     - Number of reused passwords
+     - Number of old passwords
+   - **Strength Distribution**: Visual breakdown of password strengths
+
+3. **Using the Dashboard**:
+   - The dashboard updates automatically when you make changes
+   - Keep it open to monitor your password health in real-time
+   - Close it when not needed to save system resources
+
+### View Toggle
+
+Switch between different views for managing your passwords:
+
+1. **List View**:
+   - Displays passwords in a table format
+   - Best for detailed information and sorting
+   - Access by clicking the list view button in the toolbar
+
+2. **Grid View**:
+   - Shows password entries as cards
+   - Better visual overview with icons
+   - Access by clicking the grid view button in the toolbar
+
+3. **Switching Between Views**:
+   - Click the view toggle button in the toolbar
+   - Your preference will be remembered for the next session
 
 ## Password Generator
 

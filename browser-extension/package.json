@@ -1,0 +1,30 @@
+{
+  "name": "password-manager-extension",
+  "version": "1.0.0",
+  "description": "Browser extension for Password Manager",
+  "main": "build.js",
+  "scripts": {
+    "build": "node build.js",
+    "build:chrome": "TARGET_BROWSERS=chrome node build.js",
+    "build:firefox": "TARGET_BROWSERS=firefox node build.js",
+    "build:opera": "TARGET_BROWSERS=opera node build.js",
+    "watch": "chokidar '**/*.js' '**/*.html' '**/*.css' -c 'npm run build'"
+  },
+  "keywords": [
+    "password",
+    "manager",
+    "browser",
+    "extension",
+    "autofill"
+  ],
+  "author": "Nsfr750",
+  "license": "GPL-3.0",
+  "devDependencies": {
+    "archiver": "^5.3.1",
+    "chokidar-cli": "^3.0.0",
+    "fs-extra": "^10.1.0"
+  },
+  "dependencies": {
+    "webextension-polyfill": "^0.10.0"
+  }
+}

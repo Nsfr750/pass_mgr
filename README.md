@@ -19,6 +19,7 @@ A secure, open-source password manager with advanced security features and cross
 - 📂 **Import/Export**: Securely import from and export to various formats
 - 🔄 **Auto-Backup**: Automatic backups of your password database
 - 📊 **Password Strength Analysis**: Get insights into your password security
+- 🌐 **Browser Extension**: Auto-fill and save passwords in Chrome, Firefox, and Opera
 - 🎨 **Themes**: Light and dark mode support
 
 ## 🚀 Getting Started
