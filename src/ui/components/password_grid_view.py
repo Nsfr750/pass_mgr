@@ -311,8 +311,8 @@ class PasswordGridView(QScrollArea):
     def __init__(self, parent=None):
         """Initialize the grid view."""
         super().__init__(parent)
-        self._setup_ui()
         self.entries = []
+        self._setup_ui()
     
     def _setup_ui(self):
         """Set up the UI components."""

@@ -192,8 +192,15 @@ class MainWindow(QMainWindow):
         
         # Initialize data
         self.entries = []
+        self.grid_view = None  # Initialize grid_view attribute
         
-        # Load initial entries
+        # Set up the UI first
+        self._setup_menubar()
+        self._setup_toolbar()
+        self._setup_views()
+        self._setup_statusbar()
+        
+        # Then load the data
         self.refresh_entries()
     
     def set_actions_enabled(self, enabled):
@@ -336,8 +343,8 @@ class MainWindow(QMainWindow):
         
         # Create grid view
         self.grid_view = PasswordGridView()
-        self.grid_view.entry_edit_requested.connect(self.edit_entry)
-        self.grid_view.entry_delete_requested.connect(self.delete_entry)
+        self.grid_view.edit_requested.connect(self.edit_entry)
+        self.grid_view.delete_requested.connect(self.delete_entry)
         self.stacked_views.addWidget(self.grid_view)
         
         # Set initial view
@@ -920,7 +927,8 @@ class MainWindow(QMainWindow):
             self._update_table_view()
             
             # Update grid view
-            self._update_grid_view()
+            if hasattr(self, 'grid_view') and self.grid_view:
+                self._update_grid_view()
             
             # Update dashboard
             self.refresh_dashboard()
@@ -936,6 +944,29 @@ class MainWindow(QMainWindow):
             logger.error(f"Error refreshing entries: {e}")
             QMessageBox.critical(self, "Error", f"Failed to load entries: {e}")
     
+    def _add_entry_to_table(self, entry):
+        """Add a single entry to the table.
+        
+        Args:
+            entry: The PasswordEntry to add
+        """
+        row = self.table.rowCount()
+        self.table.insertRow(row)
+        
+        # Set items for each column
+        self.table.setItem(row, 0, QTableWidgetItem(entry.title or ""))
+        self.table.setItem(row, 1, QTableWidgetItem(entry.username or ""))
+        
+        # Password field (masked by default)
+        password_item = QTableWidgetItem("•" * 8)  # Show dots instead of actual password
+        password_item.setData(Qt.UserRole, entry)  # Store the entry for later use
+        self.table.setItem(row, 2, password_item)
+        
+        self.table.setItem(row, 3, QTableWidgetItem(entry.url or ""))
+        self.table.setItem(row, 4, QTableWidgetItem(entry.notes or ""))
+        self.table.setItem(row, 5, QTableWidgetItem(str(entry.updated_at or "")))
+        self.table.setItem(row, 6, QTableWidgetItem(str(entry.id)))  # Hidden ID column
+    
     def _update_table_view(self):
         """Update the table view with current entries."""
         self.table.setRowCount(0)
@@ -944,7 +975,8 @@ class MainWindow(QMainWindow):
     
     def _update_grid_view(self):
         """Update the grid view with current entries."""
-        self.grid_view.set_entries(self.entries)
+        if hasattr(self, 'grid_view') and self.grid_view:
+            self.grid_view.set_entries(self.entries)
     
     def refresh_dashboard(self):
         """Update the password health dashboard."""

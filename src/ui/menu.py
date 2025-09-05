@@ -153,18 +153,12 @@ class MenuBar(QMenuBar):
         # Help menu
         help_menu = self.addMenu("&Help")
         
-        # Check for Updates action
-        self.update_action = QAction("Check for &Updates...", self)
-        self.update_action.triggered.connect(self.parent.check_for_updates)
-        help_menu.addAction(self.update_action)
-        
-        # Sponsor action
-        self.sponsor_action = QAction("&Sponsor...", self)
-        self.sponsor_action.triggered.connect(self.parent.show_sponsor_dialog)
-        help_menu.addAction(self.sponsor_action)
-        
-        help_menu.addSeparator()
-        
+        # Help action
+        help_action = QAction("&Help...", self)
+        help_action.setShortcut("F1")
+        help_action.triggered.connect(self.show_help)
+        help_menu.addAction(help_action)
+    
         # Wiki action
         wiki_action = QAction("&Wiki", self)
         wiki_action.triggered.connect(self.parent.open_wiki)
@@ -174,21 +168,26 @@ class MenuBar(QMenuBar):
         issues_action = QAction("Report &Issues", self)
         issues_action.triggered.connect(self.parent.open_issues)
         help_menu.addAction(issues_action)
-        
-        # Help action
-        help_action = QAction("&Help...", self)
-        help_action.setShortcut("F1")
-        help_action.triggered.connect(self.show_help)
-        help_menu.addAction(help_action)
-        
-        # Separator
+       
         help_menu.addSeparator()
-        
+       
         # About action
         about_action = QAction("&About", self)
         about_action.triggered.connect(self.parent.show_about)
         help_menu.addAction(about_action)
-    
+        
+        # Sponsor action
+        self.sponsor_action = QAction("&Sponsor...", self)
+        self.sponsor_action.triggered.connect(self.parent.show_sponsor_dialog)
+        help_menu.addAction(self.sponsor_action)
+        
+        help_menu.addSeparator()
+        
+        # Check for Updates action
+        self.update_action = QAction("Check for &Updates...", self)
+        self.update_action.triggered.connect(self.parent.check_for_updates)
+        help_menu.addAction(self.update_action)
+        
     def add_importer(self, importer):
         """Add an importer to the import menu.
         
@@ -205,8 +204,16 @@ class MenuBar(QMenuBar):
     
     def show_help(self):
         """Show the help dialog."""
-        from .help_dialog import show_help_dialog
-        show_help_dialog(self.parent)
+        try:
+            from .help_dialog import show_help_dialog
+            show_help_dialog(self.parent)
+        except ImportError as e:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(
+                self.parent,
+                "Error",
+                f"Could not load help system: {str(e)}"
+            )
     
     def set_actions_enabled(self, enabled):
         """Enable or disable menu actions.

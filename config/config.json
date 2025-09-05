@@ -1,6 +1,6 @@
 {
     "general": {
-        "theme": "dark",
+        "theme": "system",
         "auto_lock_timeout": 15
     },
     "security": {
