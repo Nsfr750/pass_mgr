@@ -16,7 +16,8 @@ from .security import (
     decrypt_data, 
     generate_salt, 
     hash_password, 
-    verify_password
+    verify_password,
+    AESGCM
 )
 
 from .models import PasswordEntry, ImportStats
@@ -62,6 +63,7 @@ class DatabaseManager:
                 cursor.execute('SELECT value FROM metadata WHERE key = ?', ('password_salt',))
                 result = cursor.fetchone()
                 if not result:
+                    logger.error("No password salt found in database")
                     return False
                     
                 salt = result[0]
@@ -70,39 +72,53 @@ class DatabaseManager:
                 cursor.execute('SELECT value FROM metadata WHERE key = ?', ('password_hash',))
                 result = cursor.fetchone()
                 if not result:
+                    logger.error("No password hash found in database")
                     return False
                     
                 stored_hash = result[0]
                 
                 # Verify the password
                 if not verify_password(stored_hash, password, salt):
+                    logger.warning("Password verification failed")
                     return False
                 
                 # If we get here, the password is correct - derive the master key
-                self.master_key, _ = self._generate_key(password, salt)
+                self.master_key, derived_salt = self._generate_key(password, salt)
+                if not self.master_key:
+                    logger.error("Failed to derive master key")
+                    return False
+                    
+                # Verify the key can be used for decryption by trying to decrypt a test value
+                test_key = self._verify_master_key()
+                if not test_key:
+                    logger.error("Failed to verify master key with existing data")
+                    return False
+                    
+                logger.info("Authentication successful")
                 return True
                 
         except Exception as e:
-            logger.error(f"Error during authentication: {e}")
+            logger.error(f"Error during authentication: {e}", exc_info=True)
             return False
     
     def is_initialized(self) -> bool:
         """Check if the database is initialized with a master password.
         
         Returns:
-            bool: True if the database is initialized, False otherwise
+            bool: True if the database is initialized with a master password, False otherwise
         """
         if not self.db_path.exists():
             return False
             
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            # Check if the master_key table exists and has a key
+            # Check if password hash and salt exist in the metadata table
             cursor.execute("""
-                SELECT name FROM sqlite_master 
-                WHERE type='table' AND name='master_key'
+                SELECT COUNT(*) FROM metadata 
+                WHERE key IN ('password_hash', 'password_salt')
             """)
-            return cursor.fetchone() is not None
+            count = cursor.fetchone()[0]
+            return count == 2
             
     def _initialize_database(self) -> None:
         """Initialize the database if it doesn't exist."""
@@ -180,17 +196,20 @@ class DatabaseManager:
     
     def _get_connection(self) -> sqlite3.Connection:
         """Get a database connection with the right settings."""
-        conn = sqlite3.connect(
-            str(self.db_path),
-            detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
-        )
-        conn.row_factory = sqlite3.Row
-        
-        # Enable foreign keys and WAL mode for better concurrency
-        conn.execute('PRAGMA foreign_keys = ON')
-        conn.execute('PRAGMA journal_mode = WAL')
-        
-        return conn
+        try:
+            conn = sqlite3.connect(
+                str(self.db_path),
+                detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
+            )
+            # Use sqlite3.Row to provide both dictionary-style and tuple access
+            conn.row_factory = sqlite3.Row
+            # Enable foreign keys and WAL mode for better concurrency
+            conn.execute('PRAGMA foreign_keys = ON')
+            conn.execute('PRAGMA journal_mode = WAL')
+            return conn
+        except sqlite3.Error as e:
+            logger.error(f"Error connecting to database: {e}")
+            raise
     
     def _generate_key(self, password: str, salt: bytes = None) -> Tuple[bytes, bytes]:
         """Generate a key from a password using PBKDF2."""
@@ -202,20 +221,57 @@ class DatabaseManager:
         if data is None:
             return None, None
             
-        # Encrypt the data using the security module
-        ciphertext, nonce = encrypt_data(data, self.master_key)
-        return ciphertext, nonce
+        try:
+            # Generate a new nonce for each encryption
+            nonce = os.urandom(12)  # 96 bits for AES-GCM
+            aesgcm = AESGCM(self.master_key)
+            ciphertext = aesgcm.encrypt(
+                nonce=nonce,
+                data=data.encode('utf-8'),
+                associated_data=None
+            )
+            return ciphertext, nonce
+        except Exception as e:
+            logger.error(f"Encryption failed: {e}")
+            raise
+    
+    def _verify_master_key(self) -> bool:
+        """Verify that the master key can decrypt existing data."""
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                # Try to get one entry to test decryption
+                cursor.execute('SELECT password_encrypted, iv FROM passwords LIMIT 1')
+                result = cursor.fetchone()
+                if result and result[0] and result[1]:
+                    # Try to decrypt the data
+                    try:
+                        decrypt_data(result[0], self.master_key, result[1])
+                        return True
+                    except Exception as e:
+                        logger.error(f"Master key verification failed: {e}")
+                        return False
+                return True  # If no entries to verify, assume key is good
+        except Exception as e:
+            logger.error(f"Error verifying master key: {e}")
+            return False
     
     def _decrypt_data(self, encrypted_data: bytes, nonce: bytes) -> str:
-        """Decrypt data using AES-GCM."""
-        if encrypted_data is None or nonce is None:
+        """Decrypt data using the master key."""
+        if not encrypted_data or not nonce:
+            return ""
+            
+        if not self.master_key:
+            logger.error("Cannot decrypt: master key not set")
             return ""
             
         try:
-            return decrypt_data(encrypted_data, self.master_key, nonce)
+            from .security import decrypt_data
+            plaintext = decrypt_data(encrypted_data, self.master_key, nonce)
+            return plaintext if plaintext else ""
         except Exception as e:
-            logger.error(f"Failed to decrypt data: {e}")
-            return "[Decryption Error]"
+            logger.error(f"Decryption failed: {e}", exc_info=True)
+            return ""
     
     def set_master_password(self, password: str, old_password: str = None) -> bool:
         """Set or change the master password.
@@ -343,37 +399,130 @@ class DatabaseManager:
             logger.error(f"Error getting entry: {e}")
             return None
     
-    def _row_to_entry(self, row) -> PasswordEntry:
-        """Convert a database row to a PasswordEntry object."""
-        # Decrypt the data
-        password = self._decrypt_data(row['password_encrypted'], row['iv'])
-        notes = self._decrypt_data(row['notes_encrypted'], row['iv'])
+    def _row_to_entry(self, row):
+        """Convert a database row to a PasswordEntry object.
         
-        # Parse tags
-        tags = []
-        if row['tags_encrypted']:
-            try:
-                tags_json = self._decrypt_data(row['tags_encrypted'], row['iv'])
-                if tags_json:
-                    tags = json.loads(tags_json)
-            except (json.JSONDecodeError, AttributeError):
-                logger.warning("Failed to parse tags")
+        Args:
+            row: A database row (can be dict, sqlite3.Row, or similar)
+            
+        Returns:
+            PasswordEntry or None: The converted entry or None if conversion fails
+        """
+        if not row:
+            return None
+            
+        try:
+            # Convert sqlite3.Row to dict if needed
+            if hasattr(row, 'keys'):  # It's a Row object
+                row_dict = {key: row[key] for key in row.keys()}
+            else:  # It's already a dict or similar
+                row_dict = dict(row)
+                
+            # Get required fields
+            entry_id = row_dict.get('id')
+            title = row_dict.get('title', '')
+            username = row_dict.get('username', '')
+            url = row_dict.get('url', '')
+            notes = row_dict.get('notes', '')
+            folder = row_dict.get('folder', '')
+            
+            # Handle tags
+            tags = []
+            if 'tags' in row_dict and row_dict['tags']:
+                try:
+                    if isinstance(row_dict['tags'], str):
+                        tags = [t.strip() for t in row_dict['tags'].split(',') if t.strip()]
+                    elif isinstance(row_dict['tags'], (list, tuple)):
+                        tags = list(row_dict['tags'])
+                except Exception as e:
+                    logger.warning(f"Error parsing tags for entry {entry_id}: {e}")
+            
+            # Handle dates safely
+            def safe_parse_date(date_str, default=None):
+                if not date_str:
+                    return default or datetime.now()
+                try:
+                    if isinstance(date_str, str):
+                        return datetime.fromisoformat(date_str)
+                    elif isinstance(date_str, (int, float)):
+                        return datetime.fromtimestamp(date_str)
+                    return default or datetime.now()
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Error parsing date '{date_str}' for entry {entry_id}: {e}")
+                    return default or datetime.now()
+            
+            created_at = safe_parse_date(row_dict.get('created_at'))
+            updated_at = safe_parse_date(row_dict.get('updated_at'))
+            
+            # Try to get password from either encrypted or plain field
+            password = row_dict.get('password', '')
+            if 'password_encrypted' in row_dict and 'iv' in row_dict:
+                try:
+                    decrypted = self._decrypt_data(row_dict['password_encrypted'], row_dict['iv'])
+                    if decrypted:
+                        password = decrypted
+                except Exception as e:
+                    logger.warning(f"Failed to decrypt password for entry {entry_id}: {e}")
+            
+            # Create and return the PasswordEntry
+            return PasswordEntry(
+                id=entry_id,
+                title=str(title),
+                username=str(username),
+                password=str(password) if password is not None else '',
+                url=str(url),
+                notes=str(notes),
+                folder=str(folder),
+                tags=[str(tag) for tag in tags],
+                created_at=created_at,
+                updated_at=updated_at
+            )
+            
+        except Exception as e:
+            logger.error(f"Error processing entry {entry_id if 'entry_id' in locals() else 'unknown'}: {e}", exc_info=True)
+            return None
+    
+    def search_entries(self, query: str) -> List[PasswordEntry]:
+        """Search for password entries matching the query.
         
-        return PasswordEntry(
-            id=row['id'],
-            title=row['title'],
-            username=row['username'],
-            password=password,
-            url=row['url'],
-            notes=notes,
-            folder=row['folder'],
-            tags=tags,
-            created_at=row['created_at'],
-            updated_at=row['updated_at']
-        )
+        Args:
+            query: Search term to look for in titles, usernames, and URLs
+            
+        Returns:
+            List[PasswordEntry]: List of matching password entries
+        """
+        if not self.master_key:
+            raise ValueError("Master key not set. Call set_master_password first.")
+            
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                search_term = f"%{query}%"
+                cursor.execute('''
+                    SELECT * FROM passwords 
+                    WHERE title LIKE ? OR username LIKE ? OR url LIKE ?
+                    ORDER BY title COLLATE NOCASE
+                ''', (search_term, search_term, search_term))
+                
+                entries = []
+                for row in cursor.fetchall():
+                    entry = self._row_to_entry(row)
+                    if entry:  # Only add entries that were successfully processed
+                        entries.append(entry)
+                
+                logger.info(f"Found {len(entries)} entries matching search: {query}")
+                return entries
+                
+        except Exception as e:
+            logger.error(f"Error searching entries: {e}", exc_info=True)
+            return []
     
     def get_all_entries(self) -> List[PasswordEntry]:
-        """Get all password entries."""
+        """Get all password entries from the database.
+        
+        Returns:
+            List[PasswordEntry]: List of all password entries
+        """
         if not self.master_key:
             raise ValueError("Master key not set. Call set_master_password first.")
             
@@ -381,14 +530,23 @@ class DatabaseManager:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
-                    SELECT * FROM passwords ORDER BY title COLLATE NOCASE
+                    SELECT * FROM passwords 
+                    ORDER BY title COLLATE NOCASE
                 ''')
                 
-                return [self._row_to_entry(row) for row in cursor.fetchall()]
+                entries = []
+                for row in cursor.fetchall():
+                    entry = self._row_to_entry(row)
+                    if entry:  # Only add entries that were successfully processed
+                        entries.append(entry)
+                
+                logger.info(f"Successfully loaded {len(entries)} entries from database")
+                return entries
+                
         except Exception as e:
-            logger.error(f"Error getting all entries: {e}")
+            logger.error(f"Error getting all entries: {e}", exc_info=True)
             return []
-    
+            
     def search_entries(self, query: str) -> List[PasswordEntry]:
         """Search for password entries matching the query."""
         if not self.master_key:
@@ -407,7 +565,13 @@ class DatabaseManager:
                     ORDER BY title COLLATE NOCASE
                 ''', (query, query, query))
                 
-                return [self._row_to_entry(row) for row in cursor.fetchall()]
+                entries = []
+                for row in cursor.fetchall():
+                    entry = self._row_to_entry(row)
+                    if entry:  # Only add entries that were successfully processed
+                        entries.append(entry)
+                
+                return entries
         except Exception as e:
             logger.error(f"Error searching entries: {e}")
             return []
@@ -522,37 +686,3 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Error exporting to CSV: {e}")
             raise IOError(f"Failed to export to CSV: {e}")
-            
-        try:
-            entries = self.get_all_entries()
-            
-            with open(file_path, 'w', newline='', encoding='utf-8') as f:
-                import csv
-                
-                # Define the field names
-                fieldnames = [
-                    'title', 'username', 'password', 'url', 'notes',
-                    'folder', 'tags', 'created_at', 'updated_at'
-                ]
-                
-                writer = csv.DictWriter(f, fieldnames=fieldnames)
-                writer.writeheader()
-                
-                for entry in entries:
-                    writer.writerow({
-                        'title': entry.title,
-                        'username': entry.username,
-                        'password': entry.password,
-                        'url': entry.url,
-                        'notes': entry.notes or '',
-                        'folder': entry.folder or '',
-                        'tags': ','.join(entry.tags) if entry.tags else '',
-                        'created_at': entry.created_at.isoformat(),
-                        'updated_at': entry.updated_at.isoformat()
-                    })
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error exporting to CSV: {e}")
-            return False

@@ -17,44 +17,68 @@ class PasswordDialog(QDialog):
     
     password_set = Signal(str)  # Signal emitted when password is set
     
-    def __init__(self, is_new_db: bool = False, parent=None):
+    def __init__(self, title=None, message=None, confirm=None, parent=None, is_new_db=False):
         """Initialize the password dialog.
         
         Args:
-            is_new_db: Whether this is for a new database (True) or an existing one (False)
+            title: Dialog title (optional, will be set based on context if not provided)
+            message: Message to display (optional, will be set based on context if not provided)
+            confirm: Whether to show password confirmation field (optional, will be set based on context if not provided)
             parent: Parent widget
+            is_new_db: Whether this is for a new database (affects title and messages)
         """
         super().__init__(parent)
         self.is_new_db = is_new_db
+        
+        # Set default values based on context
+        if title is None:
+            self.title = "Set Master Password" if is_new_db else "Enter Master Password"
+        else:
+            self.title = title
+            
+        if message is None:
+            self.message = "Create a strong master password:" if is_new_db else "Enter your master password:"
+        else:
+            self.message = message
+            
+        # Always show confirmation for new database, otherwise use the provided value
+        self.confirm = True if is_new_db else (confirm if confirm is not None else False)
+        
         self.setup_ui()
     
     def setup_ui(self):
         """Set up the user interface."""
-        self.setWindowTitle("Password Manager - Master Password")
+        self.setWindowTitle(self.title)
         self.setMinimumWidth(400)
         
         # Main layout
         layout = QVBoxLayout(self)
         
-        # Add icon/title
+        # Add title/message
         title_layout = QVBoxLayout()
         
-        # Try to load icon if available
-        try:
-            from .. import __version__
-            title_label = QLabel(f"<h2>Password Manager {__version__}</h2>")
-        except (ImportError, AttributeError):
-            title_label = QLabel("<h2>Password Manager</h2>")
+        # If this is a master password dialog, show the full UI
+        if hasattr(self, 'is_new_db'):
+            # Try to load icon if available
+            try:
+                from .. import __version__
+                title_label = QLabel(f"<h2>Password Manager {__version__}</h2>")
+            except (ImportError, AttributeError):
+                title_label = QLabel("<h2>Password Manager</h2>")
+                
+            title_label.setAlignment(Qt.AlignCenter)
+            title_layout.addWidget(title_label)
             
-        title_label.setAlignment(Qt.AlignCenter)
-        title_layout.addWidget(title_label)
-        
-        if self.is_new_db:
-            subtext = "Set up your master password"
+            if self.is_new_db:
+                subtext = "Set up your master password"
+            else:
+                subtext = "Enter your master password"
+                
+            subtext_label = QLabel(subtext)
         else:
-            subtext = "Enter your master password"
+            # For simple password dialogs, just show the message
+            subtext_label = QLabel(self.message)
             
-        subtext_label = QLabel(subtext)
         subtext_label.setAlignment(Qt.AlignCenter)
         title_layout.addWidget(subtext_label)
         
@@ -63,17 +87,19 @@ class PasswordDialog(QDialog):
         # Form layout for input fields
         form_layout = QFormLayout()
         
-        # Password field with generate button
+        # Password field with optional generate button
         password_layout = QHBoxLayout()
         
         self.password_edit = QLineEdit()
         self.password_edit.setEchoMode(QLineEdit.Password)
         password_layout.addWidget(self.password_edit)
         
-        # Generate password button
-        generate_btn = QPushButton("Generate")
-        generate_btn.clicked.connect(self.generate_password)
-        password_layout.addWidget(generate_btn)
+        # Only show generate button for master password setup
+        if hasattr(self, 'is_new_db') or self.confirm:
+            # Generate password button
+            generate_btn = QPushButton("Generate")
+            generate_btn.clicked.connect(self.generate_password)
+            password_layout.addWidget(generate_btn)
         
         form_layout.addRow("Password:", password_layout)
         
@@ -81,37 +107,30 @@ class PasswordDialog(QDialog):
         self.show_password_check = QCheckBox("Show password")
         self.show_password_check.toggled.connect(self.toggle_password_visibility)
         
-        # Only show confirm password for new database
-        if self.is_new_db:
+        # Show confirm password if requested or for new DB
+        if hasattr(self, 'is_new_db') and self.is_new_db or self.confirm:
             self.confirm_edit = QLineEdit()
             self.confirm_edit.setEchoMode(QLineEdit.Password)
-            self.confirm_edit.setPlaceholderText("Confirm master password")
+            self.confirm_edit.setPlaceholderText("Confirm password")
             
             form_layout.addRow("Confirm Password:", self.confirm_edit)
             form_layout.addRow("", self.show_password_check)
             
-            # Password strength indicator
-            self.strength_label = QLabel()
-            self.strength_label.setAlignment(Qt.AlignRight)
-            self.password_edit.textChanged.connect(self.update_password_strength)
-            form_layout.addRow("", self.strength_label)
+            # Password strength indicator (only for master password)
+            if hasattr(self, 'is_new_db'):
+                self.strength_label = QLabel()
+                self.strength_label.setAlignment(Qt.AlignRight)
+                self.password_edit.textChanged.connect(self.update_password_strength)
+                form_layout.addRow("", self.strength_label)
         else:
             form_layout.addRow("", self.show_password_check)
         
         layout.addLayout(form_layout)
         
         # Buttons
-        button_box = QDialogButtonBox()
-        
-        if self.is_new_db:
-            ok_button = button_box.addButton("Create", QDialogButtonBox.AcceptRole)
-        else:
-            ok_button = button_box.addButton("Unlock", QDialogButtonBox.AcceptRole)
-            
-        cancel_button = button_box.addButton("Exit", QDialogButtonBox.RejectRole)
-        
-        ok_button.clicked.connect(self.accept)
-        cancel_button.clicked.connect(self.reject)
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.validate)
+        button_box.rejected.connect(self.reject)
         
         layout.addWidget(button_box)
         
@@ -203,34 +222,66 @@ class PasswordDialog(QDialog):
             self.strength_label.setText("Strong")
             self.strength_label.setStyleSheet("color: green;")
     
-    def accept(self):
-        """Handle the accept button click."""
-        password = self.password_edit.text()
+    def validate(self):
+        """Validate the password and accept the dialog if valid."""
+        password = self.password_edit.text().strip()
         
-        # Validate input
         if not password:
-            QMessageBox.warning(self, "Error", "Password cannot be empty.")
+            QMessageBox.warning(self, "Error", "Password cannot be empty")
             return
             
-        if self.is_new_db:
-            confirm = self.confirm_edit.text()
-            
+        # Check for confirmation if needed
+        if hasattr(self, 'confirm_edit') and self.confirm_edit is not None:
+            confirm = self.confirm_edit.text().strip()
             if password != confirm:
-                QMessageBox.warning(self, "Error", "Passwords do not match.")
-                return
-                
-            if len(password) < 8:
-                QMessageBox.warning(
-                    self, 
-                    "Weak Password", 
-                    "For security, please use a password of at least 8 characters."
-                )
+                QMessageBox.warning(self, "Error", "Passwords do not match")
                 return
         
-        # Emit the password and accept the dialog
-        self.password_set.emit(password)
-        super().accept()
+        # Additional validation for master password
+        if hasattr(self, 'is_new_db') and self.is_new_db:
+            # Check password strength for new DB
+            if len(password) < 12:
+                reply = QMessageBox.warning(
+                    self,
+                    "Weak Password",
+                    "Your password is shorter than 12 characters.\n"
+                    "We recommend using a longer passphrase for better security.\n\n"
+                    "Do you want to use this password anyway?",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No
+                )
+                if reply == QMessageBox.No:
+                    return
+        
+        self.password = password
+        self.accept()
     
+    def get_password(self) -> str:
+        """Get the entered password.
+        
+        Returns:
+            str: The entered password, or None if dialog was cancelled
+        """
+        return getattr(self, 'password', None)
+        
+    @classmethod
+    def get_password_dialog(cls, title="Password Required", message="Enter password:", confirm=False, parent=None) -> str:
+        """Static method to show a password dialog and get the result.
+        
+        Args:
+            title: Dialog title
+            message: Message to display
+            confirm: Whether to show password confirmation field
+            parent: Parent widget
+            
+        Returns:
+            str: The entered password, or None if cancelled
+        """
+        dialog = cls(title=title, message=message, confirm=confirm, parent=parent)
+        if dialog.exec() == QDialog.Accepted:
+            return dialog.get_password()
+        return None
+
     @staticmethod
     def get_password(parent=None, is_new_db=False):
         """Static method to show the dialog and get the password.
@@ -246,7 +297,7 @@ class PasswordDialog(QDialog):
         attempts = 0
         
         while attempts < MAX_ATTEMPTS:
-            dialog = PasswordDialog(is_new_db, parent)
+            dialog = PasswordDialog(parent=parent, is_new_db=is_new_db)
             result = dialog.exec()
             
             if result != QDialog.Accepted:

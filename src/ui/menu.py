@@ -30,6 +30,66 @@ class MenuBar(QMenuBar):
         # Import submenu
         self.import_menu = file_menu.addMenu("&Import")
         
+        # Password Managers
+        self.import_1password = QAction("From &1Password...", self)
+        self.import_1password.triggered.connect(lambda: self.parent.import_from_1password())
+        self.import_menu.addAction(self.import_1password)
+        
+        self.import_bitwarden = QAction("From &Bitwarden...", self)
+        self.import_bitwarden.triggered.connect(lambda: self.parent.import_from_bitwarden())
+        self.import_menu.addAction(self.import_bitwarden)
+        
+        self.import_lastpass = QAction("From &LastPass...", self)
+        self.import_lastpass.triggered.connect(lambda: self.parent.import_from_lastpass())
+        self.import_menu.addAction(self.import_lastpass)
+        
+        # Separator
+        self.import_menu.addSeparator()
+        
+        # Browsers
+        browsers_menu = self.import_menu.addMenu("From &Browser")
+        
+        self.import_chrome = QAction("From &Chrome...", self)
+        self.import_chrome.triggered.connect(lambda: self.parent.import_from_chrome())
+        browsers_menu.addAction(self.import_chrome)
+        
+        self.import_firefox = QAction("From &Firefox...", self)
+        self.import_firefox.triggered.connect(lambda: self.parent.import_from_firefox())
+        browsers_menu.addAction(self.import_firefox)
+        
+        self.import_edge = QAction("From &Microsoft Edge...", self)
+        self.import_edge.triggered.connect(lambda: self.parent.import_from_edge())
+        browsers_menu.addAction(self.import_edge)
+        
+        self.import_opera = QAction("From &Opera...", self)
+        self.import_opera.triggered.connect(lambda: self.parent.import_from_opera())
+        browsers_menu.addAction(self.import_opera)
+        
+        self.import_safari = QAction("From &Safari...", self)
+        self.import_safari.triggered.connect(lambda: self.parent.import_from_safari())
+        browsers_menu.addAction(self.import_safari)
+        
+        # Separator
+        self.import_menu.addSeparator()
+        
+        # Other importers
+        self.import_google = QAction("From &Google...", self)
+        self.import_google.triggered.connect(lambda: self.parent.import_from_google())
+        self.import_menu.addAction(self.import_google)
+        
+        # Backup/Restore submenu
+        backup_menu = file_menu.addMenu("&Backup")
+        
+        # Create Backup
+        self.backup_action = QAction("&Create Backup...", self)
+        self.backup_action.triggered.connect(self.parent.create_backup)
+        backup_menu.addAction(self.backup_action)
+        
+        # Restore Backup
+        self.restore_action = QAction("&Restore from Backup...", self)
+        self.restore_action.triggered.connect(self.parent.restore_backup)
+        backup_menu.addAction(self.restore_action)
+        
         # Export action
         self.export_action = QAction("&Export to CSV...", self)
         self.export_action.triggered.connect(self.parent.export_entries)
@@ -115,6 +175,15 @@ class MenuBar(QMenuBar):
         issues_action.triggered.connect(self.parent.open_issues)
         help_menu.addAction(issues_action)
         
+        # Help action
+        help_action = QAction("&Help...", self)
+        help_action.setShortcut("F1")
+        help_action.triggered.connect(self.show_help)
+        help_menu.addAction(help_action)
+        
+        # Separator
+        help_menu.addSeparator()
+        
         # About action
         about_action = QAction("&About", self)
         about_action.triggered.connect(self.parent.show_about)
@@ -133,6 +202,11 @@ class MenuBar(QMenuBar):
             lambda checked, i=importer: self.parent._show_import_dialog(i)
         )
         self.import_menu.addAction(import_action)
+    
+    def show_help(self):
+        """Show the help dialog."""
+        from .help_dialog import show_help_dialog
+        show_help_dialog(self.parent)
     
     def set_actions_enabled(self, enabled):
         """Enable or disable menu actions.

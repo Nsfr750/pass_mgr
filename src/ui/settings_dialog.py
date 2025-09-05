@@ -117,10 +117,14 @@ class SettingsDialog(QDialog):
         """Load current settings into the UI."""
         # Theme
         self.theme_combo.clear()
-        self.theme_combo.addItems(["System", "Light", "Dark"])
+        self.theme_combo.addItems(["System", "Light", "Dark", "Aqua"])
         
         current_theme = settings_manager.get('general.theme', 'system').capitalize()
-        index = self.theme_combo.findText(current_theme)
+        # Special case for 'aqua' since it's not in the default theme list
+        if current_theme.lower() == 'aqua' and self.theme_combo.findText('Aqua') == -1:
+            self.theme_combo.addItem('Aqua')
+            
+        index = self.theme_combo.findText(current_theme, Qt.MatchFixedString)
         if index >= 0:
             self.theme_combo.setCurrentIndex(index)
         

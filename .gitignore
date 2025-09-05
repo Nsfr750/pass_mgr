@@ -180,3 +180,6 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 INFO.txt
+data/passwords.db
+PASS/google_passwords.csv
+PASS/lastpass_export.csv

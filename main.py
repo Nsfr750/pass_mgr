@@ -54,6 +54,7 @@ def main():
             # Initialize database
             db = DatabaseManager()
             logger.info(f"Using database at: {db.db_path}")
+            logger.info("✓ Database initialized successfully")
             
             # Only prompt for master password if the database is not initialized
             if not db.is_initialized():

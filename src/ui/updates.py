@@ -39,7 +39,7 @@ class UpdateChecker(QObject):
             from packaging import version
             
             # Get the latest release info from GitHub API
-            url = "https://api.github.com/repos/Nsfr750/password_manager/releases/latest"
+            url = "https://api.github.com/repos/Nsfr750/pass_mgr/releases/latest"
             response = requests.get(url, timeout=10)
             response.raise_for_status()
             
@@ -68,7 +68,7 @@ class UpdateDialog(QDialog):
     def __init__(self, current_version: str, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Check for Updates")
-        self.setMinimumSize(500, 400)
+        self.setMinimumSize(350, 250)
         self.current_version = current_version
         self.latest_version = None
         self.download_url = None
@@ -171,7 +171,7 @@ class UpdateDialog(QDialog):
     
     def visit_release_page(self):
         """Open the releases page in the default web browser."""
-        QDesktopServices.openUrl(QUrl("https://github.com/Nsfr750/password_manager/releases"))
+        QDesktopServices.openUrl(QUrl("https://github.com/Nsfr750/pass_mgr/releases"))
 
 def check_for_updates(parent=None):
     """

@@ -1,18 +1,19 @@
 {
     "general": {
-      "theme": "system",
-      "auto_lock_timeout": 15
+        "theme": "dark",
+        "auto_lock_timeout": 15
     },
     "security": {
-      "clear_clipboard": true,
-      "lock_on_minimize": false
+        "clear_clipboard": true,
+        "clear_clipboard_timeout": 30,
+        "lock_on_minimize": false
     },
     "database": {
-      "path": "data/password.db"
+        "path": "data/password.db"
     },
     "window": {
-      "width": 1000,
-      "height": 600,
-      "maximized": false
+        "width": 1000,
+        "height": 600,
+        "maximized": false
     }
-  }
+}
