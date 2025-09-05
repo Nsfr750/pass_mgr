@@ -8,14 +8,16 @@ from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QTabWidget, QGroupBox, QScrollArea,
     QStackedWidget, QFrame
 )
+
+from .toolbar import MainToolBar
 from PySide6.QtCore import Qt, QSize, QThread, Signal, QObject, QPoint
 from PySide6.QtGui import QAction, QIcon, QClipboard, QGuiApplication
 
 from .menu import MenuBar
 from .about import show_about_dialog
 from .components.view_toggle import ViewToggle
-from .components.password_health_widget import PasswordHealthWidget, PasswordHealthMetrics
 from .components.password_grid_view import PasswordGridView
+from .dashboard import PasswordHealthWidget, PasswordHealthMetrics
 
 from pathlib import Path
 import logging
@@ -182,9 +184,9 @@ class MainWindow(QMainWindow):
         
         # Set up the UI
         self._setup_menubar()
+        self._setup_statusbar()  # Set up status bar first
         self._setup_toolbar()
         self._setup_views()
-        self._setup_statusbar()
         
         # Add content to splitter
         self.splitter.addWidget(self.content_widget)
@@ -194,13 +196,7 @@ class MainWindow(QMainWindow):
         self.entries = []
         self.grid_view = None  # Initialize grid_view attribute
         
-        # Set up the UI first
-        self._setup_menubar()
-        self._setup_toolbar()
-        self._setup_views()
-        self._setup_statusbar()
-        
-        # Then load the data
+        # Load the data
         self.refresh_entries()
     
     def set_actions_enabled(self, enabled):
@@ -223,135 +219,30 @@ class MainWindow(QMainWindow):
     
     def _setup_toolbar(self):
         """Set up the main toolbar with view controls and search."""
-        # Create a container widget for the toolbar
-        toolbar_container = QWidget()
-        toolbar_container.setObjectName("toolbarContainer")
-        toolbar_container.setStyleSheet("""
-            #toolbarContainer {
-                background: #f8f9fa;
-                border-bottom: 1px solid #dee2e6;
-                padding: 4px 0;
-            }
-        """)
+        # Create and set up the toolbar
+        self.toolbar = MainToolBar(self)
+        self.content_layout.addWidget(self.toolbar)
         
-        # Main toolbar layout
-        toolbar_layout = QHBoxLayout(toolbar_container)
-        toolbar_layout.setContentsMargins(8, 4, 8, 4)
-        toolbar_layout.setSpacing(8)
+        # Connect signals
+        self.toolbar.add_btn.clicked.connect(self.add_entry)
+        self.toolbar.edit_btn.clicked.connect(self.edit_entry)
+        self.toolbar.delete_btn.clicked.connect(self.delete_entry)
+        self.toolbar.export_btn.clicked.connect(self.export_entries)
+        self.toolbar.dashboard_btn.clicked.connect(self.toggle_dashboard)
+        self.toolbar.search_edit.textChanged.connect(self.filter_entries)
         
-        # Left side buttons
-        left_toolbar = QHBoxLayout()
-        left_toolbar.setSpacing(4)
-        
-        # Add button
-        self.add_btn = QPushButton("Add")
-        self.add_btn.setIcon(QIcon.fromTheme("list-add"))
-        self.add_btn.clicked.connect(self.add_entry)
-        left_toolbar.addWidget(self.add_btn)
-        
-        # Edit button
-        self.edit_btn = QPushButton("Edit")
-        self.edit_btn.setIcon(QIcon.fromTheme("document-edit"))
-        self.edit_btn.clicked.connect(self.edit_entry)
-        self.edit_btn.setEnabled(False)
-        left_toolbar.addWidget(self.edit_btn)
-        
-        # Delete button
-        self.delete_btn = QPushButton("Delete")
-        self.delete_btn.setIcon(QIcon.fromTheme("edit-delete"))
-        self.delete_btn.clicked.connect(self.delete_entry)
-        self.delete_btn.setEnabled(False)
-        left_toolbar.addWidget(self.delete_btn)
-        
-        left_toolbar.addSpacing(16)
-        
-        # Import button with menu
-        from PySide6.QtWidgets import QToolButton
-        
-        self.import_btn = QToolButton()
-        self.import_btn.setText("Import")
-        self.import_btn.setIcon(QIcon.fromTheme("document-import"))
-        
-        # Create and set up the menu
-        import_menu = QMenu(self.import_btn)
-        import_menu.addAction("From LastPass").triggered.connect(self.import_from_lastpass)
-        import_menu.addAction("From Chrome").triggered.connect(self.import_from_chrome)
-        import_menu.addAction("From Firefox").triggered.connect(self.import_from_firefox)
-        import_menu.addAction("From Google").triggered.connect(self.import_from_google)
-        import_menu.addAction("From 1Password").triggered.connect(self.import_from_1password)
-        import_menu.addAction("From Bitwarden").triggered.connect(self.import_from_bitwarden)
-        import_menu.addAction("From Opera").triggered.connect(self.import_from_opera)
-        import_menu.addAction("From Edge").triggered.connect(self.import_from_edge)
-        import_menu.addAction("From Safari").triggered.connect(self.import_from_safari)
-        
-        self.import_btn.setMenu(import_menu)
-        self.import_btn.setPopupMode(QToolButton.MenuButtonPopup)
-        left_toolbar.addWidget(self.import_btn)
-        
-        # Export button
-        self.export_btn = QPushButton("Export")
-        self.export_btn.setIcon(QIcon.fromTheme("document-export"))
-        self.export_btn.clicked.connect(self.export_entries)
-        left_toolbar.addWidget(self.export_btn)
-        
-        # Add left toolbar to main layout
-        toolbar_layout.addLayout(left_toolbar)
-        
-        # Add stretch to push search to the right
-        toolbar_layout.addStretch(1)
-        
-        # Right side - view controls and search
-        right_toolbar = QHBoxLayout()
-        right_toolbar.setSpacing(8)
-        
-        # Dashboard toggle
-        self.dashboard_btn = QPushButton("Dashboard")
-        self.dashboard_btn.setCheckable(True)
-        self.dashboard_btn.setChecked(False)
-        self.dashboard_btn.setIcon(QIcon.fromTheme("view-statistics"))
-        self.dashboard_btn.clicked.connect(self.toggle_dashboard)
-        right_toolbar.addWidget(self.dashboard_btn)
-        
-        # View toggle
+        # Set up view toggle
         self.view_toggle = ViewToggle()
         self.view_toggle.view_mode_changed.connect(self.set_view_mode)
-        right_toolbar.addWidget(self.view_toggle)
-        
-        # Search bar
-        self.search_edit = QLineEdit()
-        self.search_edit.setPlaceholderText("Search passwords...")
-        self.search_edit.setClearButtonEnabled(True)
-        self.search_edit.setMinimumWidth(200)
-        self.search_edit.textChanged.connect(self.filter_entries)
-        right_toolbar.addWidget(QLabel("Search:"))
-        right_toolbar.addWidget(self.search_edit)
-        
-        # Add right toolbar to main layout
-        toolbar_layout.addLayout(right_toolbar)
-        
-        # Add toolbar container to content layout
-        self.content_layout.addWidget(toolbar_container)
+        self.toolbar.layout().insertWidget(1, self.view_toggle)
     
     def _setup_views(self):
-        """Set up the table and grid views in a stacked widget."""
-        # Create stacked widget to hold both views
-        self.stacked_views = QStackedWidget()
-        
-        # Create table view
+        """Set up the table view."""
+        # Create and set up the table view
         self._setup_table()
-        self.stacked_views.addWidget(self.table)
         
-        # Create grid view
-        self.grid_view = PasswordGridView()
-        self.grid_view.edit_requested.connect(self.edit_entry)
-        self.grid_view.delete_requested.connect(self.delete_entry)
-        self.stacked_views.addWidget(self.grid_view)
-        
-        # Set initial view
-        self.stacked_views.setCurrentIndex(0)  # Start with list view
-        
-        # Add to content layout
-        self.content_layout.addWidget(self.stacked_views)
+        # Add table to content layout
+        self.content_layout.addWidget(self.table)
     
     def _setup_table(self):
         """Set up the table widget."""
@@ -387,9 +278,6 @@ class MainWindow(QMainWindow):
         self.table.setColumnHidden(2, True)
         self.table.setColumnHidden(6, True)  # Hide ID column
         
-        # Add table to layout
-        self.main_layout.addWidget(self.table)
-        
         # Connect signals
         self.table.doubleClicked.connect(self.edit_entry)
         
@@ -398,13 +286,24 @@ class MainWindow(QMainWindow):
     
     def _setup_statusbar(self):
         """Set up the status bar."""
-        self.statusBar = QStatusBar()
-        self.setStatusBar(self.statusBar)
-        self.statusBar.showMessage("Ready")
+        # Get the status bar (this creates it if it doesn't exist)
+        status_bar = self.statusBar()
         
-        # Add entry count to status bar
+        # Clear any existing message
+        status_bar.clearMessage()
+        
+        # Remove any existing entry count label
+        if hasattr(self, 'entry_count_label'):
+            try:
+                status_bar.removeWidget(self.entry_count_label)
+                self.entry_count_label.deleteLater()
+            except (RuntimeError, AttributeError):
+                pass  # Widget already deleted or never created
+        
+        # Initialize entry count label
         self.entry_count_label = QLabel("0 entries")
-        self.statusBar.addPermanentWidget(self.entry_count_label)
+        status_bar.addPermanentWidget(self.entry_count_label)
+        status_bar.showMessage("Ready")
         
     def _select_all_entries(self):
         """Select all entries in the table."""
@@ -926,10 +825,6 @@ class MainWindow(QMainWindow):
             # Update table view
             self._update_table_view()
             
-            # Update grid view
-            if hasattr(self, 'grid_view') and self.grid_view:
-                self._update_grid_view()
-            
             # Update dashboard
             self.refresh_dashboard()
             
@@ -1075,37 +970,66 @@ class MainWindow(QMainWindow):
         return min(100, int(score))
     
     def toggle_dashboard(self, checked):
-        """Toggle the visibility of the password health dashboard."""
+        """Toggle the visibility of the password health dashboard in a separate window."""
         self.dashboard_visible = checked
-        self.dashboard.setVisible(checked)
         
-        # Update splitter sizes
         if checked:
-            self.splitter.setSizes([200, 1])
+            # Create and show the dashboard window if it doesn't exist
+            if not hasattr(self, 'dashboard_window'):
+                from .dashboard import show_dashboard_window
+                self.dashboard_window = show_dashboard_window(self)
+                self.dashboard_window.destroyed.connect(self._on_dashboard_closed)
+            else:
+                self.dashboard_window.show()
+                self.dashboard_window.activateWindow()
             self.refresh_dashboard()
-        else:
-            self.splitter.setSizes([0, 1])
+        elif hasattr(self, 'dashboard_window') and self.dashboard_window:
+            self.dashboard_window.close()
+    
+    def _on_dashboard_closed(self):
+        """Handle dashboard window being closed."""
+        if hasattr(self, 'dashboard_window'):
+            self.dashboard_window = None
+        if hasattr(self, 'dashboard_btn') and self.dashboard_btn.isChecked():
+            self.dashboard_btn.setChecked(False)
     
     def set_view_mode(self, mode):
         """Set the current view mode (list or grid)."""
-        self.current_view = mode
-        if mode == 'list':
-            self.stacked_views.setCurrentIndex(0)
-        else:  # grid
-            self.stacked_views.setCurrentIndex(1)
+        if not hasattr(self, 'current_view') or self.current_view != mode:
+            self.current_view = mode
+            
+            if mode == 'list':
+                # Show table, hide grid
+                if hasattr(self, 'grid_view'):
+                    self.grid_view.setVisible(False)
+                self.table.setVisible(True)
+            else:  # grid view
+                # Initialize grid view if it doesn't exist
+                if not hasattr(self, 'grid_view'):
+                    from .components.password_grid_view import PasswordGridView
+                    self.grid_view = PasswordGridView()
+                    self.grid_view.edit_requested.connect(self.edit_entry)
+                    self.grid_view.delete_requested.connect(self.delete_entry)
+                    self.content_layout.addWidget(self.grid_view)
+                
+                # Show grid, hide table
+                self.table.setVisible(False)
+                self.grid_view.setVisible(True)
+                self._update_grid_view()
+            
+            # Update the view toggle button state
+            if hasattr(self, 'view_toggle'):
+                self.view_toggle.set_view_mode(mode)
     
     def _update_button_states(self):
         """Update the enabled state of action buttons based on selection."""
-        if self.current_view == 'list':
-            # For list view, check if any rows are selected
-            has_selection = len(self.table.selectionModel().selectedRows()) > 0
-        else:  # grid view
-            # For grid view, check if any items are selected
-            has_selection = len(self.grid_view.selectedItems()) > 0
+        # Check if any rows are selected in the table
+        has_selection = len(self.table.selectionModel().selectedRows()) > 0
             
-        # Update button states
-        self.edit_btn.setEnabled(has_selection)
-        self.delete_btn.setEnabled(has_selection)
+        # Update button states through the toolbar
+        if hasattr(self, 'toolbar') and hasattr(self.toolbar, 'edit_btn') and hasattr(self.toolbar, 'delete_btn'):
+            self.toolbar.edit_btn.setEnabled(has_selection)
+            self.toolbar.delete_btn.setEnabled(has_selection)
     
     def filter_entries(self, text):
         """Filter the password entries based on search text."""

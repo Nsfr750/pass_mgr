@@ -1,13 +1,9 @@
-"""Password health metrics dashboard widget."""
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar, QFrame
-)
-from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QColor, QPalette, QLinearGradient, QPainter, QBrush, QPen
+"""Dashboard implementation for the Password Manager application."""
 from dataclasses import dataclass
-from typing import List, Dict, Tuple
-import math
-import datetime
+from typing import Dict
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QProgressBar
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QPainter, QColor, QLinearGradient, QPen
 
 @dataclass
 class PasswordHealthMetrics:
@@ -95,7 +91,7 @@ class HealthScoreGauge(QWidget):
         
         # Set colors based on score
         if self.score < 30:
-            gradient.setColorAt(0, QColor(220, 53, 69))  # Red
+            gradient.setColorAt(0, QColor(220, 53, 69))   # Red
             gradient.setColorAt(1, QColor(220, 100, 69))  # Red-Orange
         elif self.score < 60:
             gradient.setColorAt(0, QColor(255, 193, 7))   # Yellow
@@ -234,197 +230,76 @@ class PasswordHealthWidget(QWidget):
         strength_title = QLabel("<b>Password Strength</b>")
         strength_layout.addWidget(strength_title)
         
-        # Strength bars
+        # Add strength bars
         self.strength_bars = {}
         for strength in ['very_weak', 'weak', 'moderate', 'strong', 'very_strong']:
-            row = QHBoxLayout()
+            bar_layout = QHBoxLayout()
             
-            label = QLabel(strength.replace('_', ' ').title() + ":")
-            label.setMinimumWidth(80)
-            row.addWidget(label)
+            label = QLabel(strength.replace('_', ' ').title())
+            bar = QProgressBar()
+            bar.setRange(0, 100)
+            bar.setValue(0)
+            bar.setTextVisible(True)
+            bar.setFormat("%p%")
             
-            progress = QProgressBar()
-            progress.setMinimum(0)
-            progress.setMaximum(100)
-            progress.setValue(0)
-            progress.setTextVisible(False)
-            progress.setStyleSheet(self._get_strength_bar_style(strength))
+            bar_layout.addWidget(label, 1)
+            bar_layout.addWidget(bar, 3)
             
-            row.addWidget(progress, 1)
-            
-            count_label = QLabel("0 (0%)")
-            count_label.setMinimumWidth(60)
-            row.addWidget(count_label)
-            
-            strength_layout.addLayout(row)
-            self.strength_bars[strength] = (progress, count_label)
+            strength_layout.addLayout(bar_layout)
+            self.strength_bars[strength] = bar
         
-        metrics_layout.addWidget(self.strength_frame, 1)
-        
-        # Add stretch to push everything up
-        metrics_layout.addStretch(1)
-        
-        layout.addLayout(metrics_layout, 1)
-        
-        # Set minimum height
-        self.setMinimumHeight(200)
-    
-    def _get_strength_bar_style(self, strength: str) -> str:
-        """Get the style sheet for a strength bar."""
-        colors = {
-            'very_weak': '#dc3545',  # Red
-            'weak': '#fd7e14',       # Orange
-            'moderate': '#ffc107',   # Yellow
-            'strong': '#20c997',     # Teal
-            'very_strong': '#28a745' # Green
-        }
-        
-        color = colors.get(strength, '#6c757d')  # Default to gray
-        
-        return f"""
-            QProgressBar {{
-                border: 1px solid #dee2e6;
-                border-radius: 4px;
-                text-align: center;
-                height: 10px;
-                margin: 1px;
-            }}
-            QProgressBar::chunk {{
-                background-color: {color};
-                border-radius: 3px;
-            }}
-        """
+        metrics_layout.addWidget(self.strength_frame)
+        layout.addLayout(metrics_layout)
     
     def update_metrics(self, metrics: PasswordHealthMetrics):
-        """Update the displayed metrics.
-        
-        Args:
-            metrics: PasswordHealthMetrics object with updated data
-        """
+        """Update the displayed metrics."""
         self.metrics = metrics
         
-        # Update health score
+        # Update gauge
         self.health_gauge.set_score(metrics.health_score)
         
         # Update labels
-        self.total_label.setText(f"Total Passwords: {metrics.total_passwords}")
+        self.total_label.setText(f"<b>Total Passwords:</b> {metrics.total_passwords}")
         
-        weak_pct = (metrics.weak_passwords / metrics.total_passwords * 100) if metrics.total_passwords > 0 else 0
-        self.weak_label.setText(
-            f"Weak Passwords: {metrics.weak_passwords} ({weak_pct:.1f}%)"
-        )
+        weak_percent = (metrics.weak_passwords / metrics.total_passwords * 100) if metrics.total_passwords > 0 else 0
+        reused_percent = (metrics.reused_passwords / metrics.total_passwords * 100) if metrics.total_passwords > 0 else 0
+        old_percent = (metrics.old_passwords / metrics.total_passwords * 100) if metrics.total_passwords > 0 else 0
         
-        reused_pct = (metrics.reused_passwords / metrics.total_passwords * 100) if metrics.total_passwords > 0 else 0
-        self.reused_label.setText(
-            f"Reused Passwords: {metrics.reused_passwords} ({reused_pct:.1f}%)"
-        )
-        
-        old_pct = (metrics.old_passwords / metrics.total_passwords * 100) if metrics.total_passwords > 0 else 0
-        self.old_label.setText(
-            f"Old Passwords: {metrics.old_passwords} ({old_pct:.1f}%)"
-        )
+        self.weak_label.setText(f"<b>Weak Passwords:</b> {metrics.weak_passwords} ({weak_percent:.1f}%)")
+        self.reused_label.setText(f"<b>Reused Passwords:</b> {metrics.reused_passwords} ({reused_percent:.1f}%)")
+        self.old_label.setText(f"<b>Old Passwords:</b> {metrics.old_passwords} ({old_percent:.1f}%)")
         
         # Update strength distribution
-        total = max(1, sum(metrics.strength_distribution.values()))
-        
-        for strength, (progress, count_label) in self.strength_bars.items():
-            count = metrics.strength_distribution.get(strength, 0)
-            pct = (count / total) * 100
-            
-            progress.setValue(int(pct))
-            count_label.setText(f"{count} ({pct:.1f}%)")
-    
-    @staticmethod
-    def analyze_entries(entries: list) -> 'PasswordHealthMetrics':
-        """Analyze a list of password entries and return health metrics.
-        
-        Args:
-            entries: List of PasswordEntry objects
-            
-        Returns:
-            PasswordHealthMetrics: Calculated metrics
-        """
-        if not entries:
-            return PasswordHealthMetrics()
-        
-        metrics = PasswordHealthMetrics(total_passwords=len(entries))
-        
-        # Track password hashes to find duplicates
-        password_hashes = {}
-        
-        # Track password ages (in days)
-        now = datetime.datetime.now()
-        old_password_days = 365  # 1 year
-        
-        for entry in entries:
-            # Check for weak passwords
-            strength = PasswordHealthWidget._check_password_strength(entry.password)
-            metrics.strength_distribution[strength] += 1
-            
-            if strength in ['very_weak', 'weak']:
-                metrics.weak_passwords += 1
-            
-            # Check for reused passwords
-            pwd_hash = hash(entry.password)  # Simple hash for comparison
-            if pwd_hash in password_hashes:
-                password_hashes[pwd_hash] += 1
-            else:
-                password_hashes[pwd_hash] = 1
-            
-            # Check for old passwords
-            if hasattr(entry, 'updated_at') and entry.updated_at:
-                age = (now - entry.updated_at).days
-                if age > old_password_days:
-                    metrics.old_passwords += 1
-        
-        # Count reused passwords (appearing more than once)
-        metrics.reused_passwords = sum(count for pwd, count in password_hashes.items() if count > 1)
-        
-        return metrics
-    
-    @staticmethod
-    def _check_password_strength(password: str) -> str:
-        """Check the strength of a password.
-        
-        Args:
-            password: The password to check
-            
-        Returns:
-            str: Strength level ('very_weak', 'weak', 'moderate', 'strong', 'very_strong')
-        """
-        if not password:
-            return 'very_weak'
-            
-        score = 0
-        
-        # Length
-        if len(password) >= 12:
-            score += 3
-        elif len(password) >= 8:
-            score += 2
-        elif len(password) >= 6:
-            score += 1
-        
-        # Contains numbers
-        if any(c.isdigit() for c in password):
-            score += 1
-            
-        # Contains lowercase and uppercase
-        if any(c.islower() for c in password) and any(c.isupper() for c in password):
-            score += 1
-            
-        # Contains special characters
-        if any(not c.isalnum() for c in password):
-            score += 1
-        
-        # Determine strength level
-        if score <= 2:
-            return 'very_weak'
-        elif score <= 3:
-            return 'weak'
-        elif score <= 4:
-            return 'moderate'
-        elif score <= 5:
-            return 'strong'
+        total = sum(metrics.strength_distribution.values())
+        if total > 0:
+            for strength, count in metrics.strength_distribution.items():
+                percentage = (count / total) * 100
+                self.strength_bars[strength].setValue(int(percentage))
         else:
-            return 'very_strong'
+            for bar in self.strength_bars.values():
+                bar.setValue(0)
+
+
+def show_dashboard_window(parent=None):
+    """Show the dashboard in a separate window."""
+    from PySide6.QtWidgets import QMainWindow, QVBoxLayout, QWidget
+    
+    class DashboardWindow(QMainWindow):
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self.setWindowTitle("Password Health Dashboard")
+            self.setMinimumSize(600, 500)
+            
+            # Create main widget and layout
+            main_widget = QWidget()
+            self.setCentralWidget(main_widget)
+            layout = QVBoxLayout(main_widget)
+            
+            # Create and add dashboard widget
+            self.dashboard = PasswordHealthWidget()
+            layout.addWidget(self.dashboard)
+    
+    # Create and show the window
+    window = DashboardWindow(parent)
+    window.show()
+    return window
