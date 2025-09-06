@@ -87,27 +87,6 @@ class MainToolBar(QWidget):
         
         left_toolbar.addSpacing(16)
         
-        # Import button with menu
-        from PySide6.QtWidgets import QMenu
-        
-        self.import_btn = QToolButton()
-        self.import_btn.setText("Import")
-        self.import_btn.setIcon(QIcon.fromTheme("document-import"))
-        
-        # Create and set up the menu
-        import_menu = QMenu(self.import_btn)
-        import_menu.addAction("From LastPass").triggered.connect(self.parent.import_from_lastpass)
-        import_menu.addAction("From Chrome").triggered.connect(self.parent.import_from_chrome)
-        import_menu.addAction("From Firefox").triggered.connect(self.parent.import_from_firefox)
-        import_menu.addAction("From Google").triggered.connect(self.parent.import_from_google)
-        import_menu.addAction("From 1Password").triggered.connect(self.parent.import_from_1password)
-        import_menu.addAction("From Bitwarden").triggered.connect(self.parent.import_from_bitwarden)
-        import_menu.addAction("From Opera").triggered.connect(self.parent.import_from_opera)
-        import_menu.addAction("From Edge").triggered.connect(self.parent.import_from_edge)
-        
-        self.import_btn.setMenu(import_menu)
-        self.import_btn.setPopupMode(QToolButton.MenuButtonPopup)
-        left_toolbar.addWidget(self.import_btn)
         
         # Export button
         self.export_btn = QPushButton("Export")

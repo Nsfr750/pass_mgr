@@ -33,7 +33,7 @@ SCHEMA_VERSION = 1
 class DatabaseManager:
     """Manages the password database including encryption and decryption."""
     
-    def __init__(self, db_path: str = None, master_password: str = None):
+    def __init__(self, db_path: str = None, master_password: str = None, master_key: bytes = None):
         """Initialize the database manager.
         
         Args:
@@ -42,132 +42,66 @@ class DatabaseManager:
             master_password: Optional master password for encryption
         """
         self.db_path = Path(db_path) if db_path else get_database_path()
-        self.master_key = None
+        self.master_key = master_key
         self._initialize_database()
         
         if master_password:
             self.authenticate(master_password)
+
+    def get_master_key(self) -> Optional[bytes]:
+        """Return the master key if the user is authenticated."""
+        return self.master_key
     
     def authenticate(self, password: str) -> bool:
         """Authenticate the user with the master password.
-        
+
         Args:
             password: The master password to authenticate with
-            
+
         Returns:
             bool: True if authentication was successful, False otherwise
         """
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                
-                # Get the stored salt and hash
-                cursor.execute('SELECT value FROM metadata WHERE key = ?', ('password_salt',))
-                result = cursor.fetchone()
-                if not result:
-                    logger.error("No password salt found in database")
-                    return False
-                    
-                salt = result[0]
-                
+
                 # Get the stored hash and salt
                 cursor.execute('SELECT value FROM metadata WHERE key = ?', ('password_hash',))
                 hash_result = cursor.fetchone()
                 cursor.execute('SELECT value FROM metadata WHERE key = ?', ('password_salt',))
                 salt_result = cursor.fetchone()
-                
-                if not hash_result or not salt_result:
-                    logger.error("Password hash or salt not found in database")
+
+                if not hash_result or not salt_result or not hash_result[0] or not salt_result[0]:
+                    logger.error("Password hash or salt not found in database.")
                     return False
-                    
+
                 stored_hash = hash_result[0]
                 stored_salt = salt_result[0]
-                
-                logger.debug(f"Raw stored hash type: {type(stored_hash)}, length: {len(stored_hash) if hasattr(stored_hash, '__len__') else 'N/A'}")
-                logger.debug(f"Raw stored salt type: {type(stored_salt)}, length: {len(stored_salt) if hasattr(stored_salt, '__len__') else 'N/A'}")
-                
-                # If the stored hash is bytes, decode it to string
-                if isinstance(stored_hash, bytes):
-                    try:
-                        stored_hash = stored_hash.decode('utf-8')
-                        logger.debug("Decoded stored hash from bytes to UTF-8 string")
-                    except UnicodeDecodeError:
-                        # If it's not UTF-8, it might be base64 encoded
-                        import base64
-                        stored_hash = base64.b64encode(stored_hash).decode('utf-8')
-                        logger.debug("Encoded stored hash to base64 string")
-                
-                # If the stored salt is bytes, decode it to string
-                if isinstance(stored_salt, bytes):
-                    try:
-                        stored_salt = stored_salt.decode('utf-8')
-                        logger.debug("Decoded stored salt from bytes to UTF-8 string")
-                    except UnicodeDecodeError:
-                        # If it's not UTF-8, it might be base64 encoded
-                        import base64
-                        stored_salt = base64.b64encode(stored_salt).decode('utf-8')
-                        logger.debug("Encoded stored salt to base64 string")
-                
-                logger.debug(f"Verifying password with stored_hash: {stored_hash[:20]}... and stored_salt: {stored_salt[:20]}...")
-                
-                # Convert the stored salt from base64 to bytes
+
+                # The salt might be stored as raw bytes or a base64 encoded string.
                 import base64
-                try:
-                    salt_bytes = base64.b64decode(stored_salt)
-                except Exception as e:
-                    logger.error(f"Failed to decode salt: {e}")
-                    return False
-                
-                # Generate a new hash with the provided password and stored salt
-                from src.core.security.crypto import DEFAULT_HASHER
-                new_hash, _ = DEFAULT_HASHER.hash_password(password, salt_bytes)
-                
-                # Log the hash details for debugging
-                def safe_hex(data):
-                    if hasattr(data, 'hex'):
-                        return data.hex()
-                    elif isinstance(data, str):
-                        return data.encode('utf-8').hex()
-                    return str(data)
-                
-                logger.debug(f"Stored hash (first 16 bytes): {safe_hex(stored_hash[:16]) if hasattr(stored_hash, '__getitem__') else safe_hex(stored_hash)}")
-                logger.debug(f"New hash (first 16 bytes): {safe_hex(new_hash[:16]) if hasattr(new_hash, '__getitem__') else safe_hex(new_hash)}")
-                
-                # Ensure both hashes are bytes for comparison
-                if isinstance(stored_hash, str):
+                if isinstance(stored_salt, str):
                     try:
-                        # Try to decode from base64 first
-                        stored_hash = base64.b64decode(stored_hash)
-                    except Exception:
-                        # If not base64, encode as utf-8
-                        stored_hash = stored_hash.encode('utf-8')
-                
-                if isinstance(new_hash, str):
-                    new_hash = new_hash.encode('utf-8')
-                
-                # Compare the hashes
-                if not hmac.compare_digest(stored_hash, new_hash):
+                        salt = base64.b64decode(stored_salt)
+                    except (ValueError, TypeError) as e:
+                        logger.error(f"Could not decode salt from base64 string: {e}")
+                        return False
+                elif isinstance(stored_salt, bytes):
+                    salt = stored_salt
+                else:
+                    logger.error(f"Unsupported salt type: {type(stored_salt)}")
+                    return False
+
+                # Verify the password
+                if verify_password(password, stored_hash, salt):
+                    # On successful verification, derive the master key and store it for the session
+                    self.master_key = derive_key(password, salt)
+                    logger.info("Authentication successful")
+                    return True
+                else:
                     logger.warning("Password verification failed")
-                    logger.debug(f"Hash comparison failed. Stored hash length: {len(stored_hash)}, New hash length: {len(new_hash)}")
-                    logger.debug(f"Stored hash: {stored_hash.hex()}")
-                    logger.debug(f"New hash: {new_hash.hex()}")
                     return False
-                
-                # If we get here, the password is correct - derive the master key
-                self.master_key, derived_salt = self._generate_key(password, salt)
-                if not self.master_key:
-                    logger.error("Failed to derive master key")
-                    return False
-                    
-                # Verify the key can be used for decryption by trying to decrypt a test value
-                test_key = self._verify_master_key()
-                if not test_key:
-                    logger.error("Failed to verify master key with existing data")
-                    return False
-                    
-                logger.info("Authentication successful")
-                return True
-                
+
         except Exception as e:
             logger.error(f"Error during authentication: {e}", exc_info=True)
             return False

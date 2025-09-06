@@ -24,7 +24,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import (
     QAction, QIcon, QClipboard, QGuiApplication, 
-    QPixmap, QPainter, QColor, QFontMetrics, QFont
+    QPixmap, QPainter, QColor, QFontMetrics, QFont, QCursor
 )
 
 from .menu import MenuBar
@@ -32,14 +32,19 @@ from .about import show_about_dialog
 from .components.view_toggle import ViewToggle
 from .components.password_grid_view import PasswordGridView
 from .components.share_dialog import ShareDialog
+from .entry_dialog import EntryDialog, PasswordGeneratorDialog
+from .settings_dialog import SettingsDialog
 from .dashboard import PasswordHealthWidget, PasswordHealthMetrics
 from .utils.feedback import feedback, tooltip, with_loading_indicator
 
 from pathlib import Path
 import logging
+import subprocess
+import sys
 
 from ..core.models import PasswordEntry
 from ..core.importers import get_importers, get_importers_for_file, AVAILABLE_IMPORT_OPTIONS
+from ..core.config import is_debug_menu_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -171,6 +176,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.db = db_manager
         self.app = app  # Store the QApplication instance
+        from .theme_manager import ThemeManager
+        self.theme_manager = ThemeManager(app)
         self.current_entries = []
         
         # Track current view state
@@ -354,169 +361,51 @@ class MainWindow(QMainWindow):
     
     def _setup_menubar(self):
         """Set up the menu bar."""
-        menubar = self.menuBar()
-        
-        # File menu
-        file_menu = menubar.addMenu("&File")
-        
-        new_db_action = QAction("&New Database", self)
-        new_db_action.triggered.connect(self.new_database)
-        file_menu.addAction(new_db_action)
-        
-        # Import submenu
-        import_menu = file_menu.addMenu("&Import From...")
-        
-        # Add importers to the menu
-        for importer in get_importers():
-            # Find the importer in AVAILABLE_IMPORT_OPTIONS to get its display name
-            importer_info = next((i for i in AVAILABLE_IMPORT_OPTIONS if i['importer'] == importer.__class__), None)
-            if importer_info:
-                action = QAction(importer_info['name'], self)
-                action.triggered.connect(lambda _, i=importer: self._show_import_dialog(i))
-                import_menu.addAction(action)
-        
-        # Backup/Restore
-        file_menu.addSeparator()
-        
-        backup_action = QAction("Create &Backup...", self)
-        backup_action.triggered.connect(self.create_backup)
-        file_menu.addAction(backup_action)
-        
-        restore_action = QAction("&Restore from Backup...", self)
-        restore_action.triggered.connect(self.restore_backup)
-        file_menu.addAction(restore_action)
-        
-        # Export
-        export_action = QAction("&Export Entries...", self)
-        export_action.triggered.connect(self.export_entries)
-        file_menu.addAction(export_action)
-        
-        file_menu.addSeparator()
-        
-        exit_action = QAction("E&xit", self)
-        exit_action.setShortcut("Ctrl+Q")
-        exit_action.triggered.connect(self.close)
-        file_menu.addAction(exit_action)
-        
-        # Edit menu
-        edit_menu = menubar.addMenu("&Edit")
-        
-        add_action = QAction("&Add Entry", self)
-        add_action.setShortcut("Ctrl+N")
-        add_action.triggered.connect(self.add_entry)
-        edit_menu.addAction(add_action)
-        
-        edit_action = QAction("&Edit Entry", self)
-        edit_action.setShortcut("Ctrl+E")
-        edit_action.triggered.connect(self.edit_entry)
-        edit_menu.addAction(edit_action)
-        
-        delete_action = QAction("&Delete Entry", self)
-        delete_action.setShortcut("Del")
-        delete_action.triggered.connect(self.delete_entry)
-        edit_menu.addAction(delete_action)
-        
-        edit_menu.addSeparator()
-        
-        # Share submenu
-        share_menu = edit_menu.addMenu("&Sharing")
-        
-        share_action = QAction("Share Entry...", self)
-        share_action.triggered.connect(self.share_entry)
-        share_menu.addAction(share_action)
-        
-        manage_shares_action = QAction("Manage Shares...", self)
-        manage_shares_action.triggered.connect(self.manage_shares)
-        share_menu.addAction(manage_shares_action)
-        
-        view_requests_action = QAction("View Access Requests...", self)
-        view_requests_action.triggered.connect(self.view_access_requests)
-        share_menu.addAction(view_requests_action)
-        
-        edit_menu.addSeparator()
-        
-        select_all_action = QAction("Select &All", self)
-        select_all_action.setShortcut("Ctrl+A")
-        select_all_action.triggered.connect(self._select_all_entries)
-        edit_menu.addAction(select_all_action)
-        
-        deselect_all_action = QAction("&Deselect All", self)
-        deselect_all_action.setShortcut("Ctrl+Shift+A")
-        deselect_all_action.triggered.connect(self._deselect_all_entries)
-        edit_menu.addAction(deselect_all_action)
-        
-        # View menu
-        view_menu = menubar.addMenu("&View")
-        
-        toggle_dashboard_action = QAction("Toggle &Dashboard", self, checkable=True)
-        toggle_dashboard_action.setChecked(False)
-        toggle_dashboard_action.triggered.connect(self.toggle_dashboard)
-        view_menu.addAction(toggle_dashboard_action)
-        
-        view_menu.addSeparator()
-        
-        # View mode actions
-        view_mode_group = view_menu.addMenu("View &Mode")
-        
-        list_view_action = QAction("&List View", self, checkable=True)
-        list_view_action.setChecked(True)
-        list_view_action.triggered.connect(lambda: self.set_view_mode('list'))
-        view_mode_group.addAction(list_view_action)
-        
-        grid_view_action = QAction("&Grid View", self, checkable=True)
-        grid_view_action.setChecked(False)
-        grid_view_action.triggered.connect(lambda: self.set_view_mode('grid'))
-        view_mode_group.addAction(grid_view_action)
-        
-        # Add actions to a group for mutual exclusivity
-        view_mode_group = view_menu.addActionGroup("ViewModeGroup")
-        view_mode_group.addAction(list_view_action)
-        view_mode_group.addAction(grid_view_action)
-        view_mode_group.setExclusive(True)
-        
-        # Tools menu
-        tools_menu = menubar.addMenu("&Tools")
-        
-        # Password generator
-        password_generator_action = QAction("Password &Generator...", self)
-        password_generator_action.triggered.connect(self.show_password_generator)
-        tools_menu.addAction(password_generator_action)
-        
-        # Password analyzer
-        password_analyzer_action = QAction("Password &Analyzer...", self)
-        password_analyzer_action.triggered.connect(self.show_password_analyzer)
-        tools_menu.addAction(password_analyzer_action)
-        
-        tools_menu.addSeparator()
-        
-        # Settings
-        settings_action = QAction("&Settings...", self)
-        settings_action.triggered.connect(self.show_settings)
-        tools_menu.addAction(settings_action)
-        
-        # Help menu
-        help_menu = menubar.addMenu("&Help")
-        
-        docs_action = QAction("&Documentation...", self)
-        docs_action.triggered.connect(self.open_wiki)
-        help_menu.addAction(docs_action)
-        
-        help_menu.addSeparator()
-        
-        check_updates_action = QAction("Check for &Updates...", self)
-        check_updates_action.triggered.connect(self.check_for_updates)
-        help_menu.addAction(check_updates_action)
-        
-        help_menu.addSeparator()
-        
-        about_action = QAction("&About", self)
-        about_action.triggered.connect(lambda: show_about_dialog(self))
-        help_menu.addAction(about_action)
-        
-        sponsor_action = QAction("Support Us ❤️", self)
-        sponsor_action.triggered.connect(self.show_sponsor_dialog)
-        help_menu.addAction(sponsor_action)
-        
+        self.menu_bar = MenuBar(self)
+        self.setMenuBar(self.menu_bar)
+
+    def _run_debug_script(self, script_name):
+        """Run a debug script and display its output."""
+        try:
+            scripts_dir = Path(__file__).parent.parent.parent / 'scripts'
+            script_path = scripts_dir / script_name
+
+            if not script_path.exists():
+                QMessageBox.critical(self, "Error", f"Script not found: {script_name}")
+                return
+
+            # Run the script using the same Python interpreter as the application
+            process = subprocess.run(
+                [sys.executable, str(script_path)],
+                capture_output=True,
+                text=True,
+                check=False  # Don't raise exception for non-zero exit codes
+            )
+
+            # Display the output in a dialog
+            output_dialog = QDialog(self)
+            output_dialog.setWindowTitle(f"Output of {script_name}")
+            output_dialog.setMinimumSize(600, 400)
+            
+            layout = QVBoxLayout(output_dialog)
+            output_text = QTextEdit()
+            output_text.setReadOnly(True)
+            
+            output = f"--- STDOUT ---\n{process.stdout}\n\n--- STDERR ---\n{process.stderr}"
+            output_text.setText(output)
+            
+            layout.addWidget(output_text)
+            
+            button_box = QDialogButtonBox(QDialogButtonBox.Ok)
+            button_box.accepted.connect(output_dialog.accept)
+            layout.addWidget(button_box)
+            
+            output_dialog.exec()
+
+        except Exception as e:
+            logger.error(f"Failed to run debug script {script_name}: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to run script: {str(e)}")
+
     def _setup_toolbar(self):
         """Set up the main toolbar with view controls and search."""
         # Create and set up the toolbar
@@ -766,15 +655,16 @@ class MainWindow(QMainWindow):
     
     def _update_grid_view(self):
         """Update the grid view with current entries."""
-        if not hasattr(self, 'grid_view'):
+        if self.grid_view is None:
             self.grid_view = PasswordGridView()
-            self.grid_view.itemDoubleClicked.connect(self.on_grid_item_double_clicked)
-            
+            self.grid_view.edit_requested.connect(self.on_grid_item_double_clicked)
+
             # Add to the stacked widget if it exists
-            if hasattr(self, 'stacked_widget'):
+            if hasattr(self, 'stacked_widget') and self.stacked_widget:
                 self.stacked_widget.addWidget(self.grid_view)
         
-        self.grid_view.clear()
+        if self.grid_view:
+            self.grid_view.clear()
         
         # Sort entries by title (case-insensitive)
         sorted_entries = sorted(self.current_entries, key=lambda x: x.title.lower())
@@ -782,6 +672,16 @@ class MainWindow(QMainWindow):
         for entry in sorted_entries:
             self.grid_view.add_item(entry)
     
+    @with_loading_indicator("Loading entries...", "Failed to load entries")
+    def _show_tooltip(self):
+        """Show the tooltip at the current cursor position."""
+        if self.current_tooltip:
+            QToolTip.showText(QCursor.pos(), self.current_tooltip, self)
+
+    def clear_status_bar(self):
+        """Clear the status bar message."""
+        self.statusBar().clearMessage()
+
     @with_loading_indicator("Loading entries...", "Failed to load entries")
     def refresh_entries(self, search_text=None):
         """Refresh the list of password entries with loading indicators and error handling.
@@ -795,7 +695,7 @@ class MainWindow(QMainWindow):
             
             # Clear existing entries
             self.entries = []
-            self.table_widget.setRowCount(0)
+            self.table.setRowCount(0)
             
             # Get entries from database
             if search_text and search_text.strip():
@@ -844,9 +744,33 @@ class MainWindow(QMainWindow):
         # If a timeout is specified, set up a timer to clear the message
         if timeout > 0:
             QTimer.singleShot(timeout, self.statusBar().clearMessage)
-            logger.error(f"Error refreshing entries: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to load entries: {e}")
     
+    def show_context_menu(self, pos):
+        """Show the context menu for the table."""
+        # Get the entry at the clicked position
+        index = self.table.indexAt(pos)
+        if not index.isValid():
+            return
+
+        # Create the context menu
+        menu = QMenu(self)
+
+        # Add actions
+        edit_action = menu.addAction("Edit Entry")
+        delete_action = menu.addAction("Delete Entry")
+        share_action = menu.addAction("Share Entry")
+
+        # Execute the menu and get the chosen action
+        action = menu.exec(self.table.mapToGlobal(pos))
+
+        # Handle the chosen action
+        if action == edit_action:
+            self.edit_entry(index=index)
+        elif action == delete_action:
+            self.delete_entry(index=index)
+        elif action == share_action:
+            self.share_entry(index=index)
+
     def on_table_double_click(self, index):
         """Handle double-click on table items."""
         if index.column() == 0:  # Share icon column
@@ -951,6 +875,23 @@ class MainWindow(QMainWindow):
         # Refresh the view to update the shared status
         self.refresh_entries()
     
+    def add_entry(self):
+        """Add a new password entry."""
+        dialog = EntryDialog(self)
+        if dialog.exec() == QDialog.Accepted:
+            entry = dialog.get_entry()
+            try:
+                self.db.save_entry(entry)
+                self.refresh_entries()
+                feedback.show_message("Entry added successfully", "Success")
+            except Exception as e:
+                logger.error(f"Error adding entry: {e}")
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    f"An error occurred while adding the entry: {str(e)}"
+                )
+
     def edit_entry(self, index=None, entry_id=None):
         """Edit the selected password entry.
         
@@ -1182,6 +1123,13 @@ class MainWindow(QMainWindow):
                 self.dashboard.update_metrics(metrics)
         except Exception as e:
             logger.error("Failed to refresh dashboard: %s", str(e))
+
+    def _on_dashboard_closed(self):
+        """Handle the dashboard closed event."""
+        self.dashboard_visible = False
+        # Uncheck the dashboard toggle button if it exists
+        if hasattr(self, 'toolbar') and hasattr(self.toolbar, 'dashboard_btn'):
+            self.toolbar.dashboard_btn.setChecked(False)
 
     def _calculate_password_metrics(self):
         
@@ -1503,10 +1451,12 @@ class MainWindow(QMainWindow):
             )
     
     def _apply_settings(self):
-        # Apply the current settings
-        # This method will be called when settings are changed
-        # You can add code here to apply settings like theme changes, etc.
-        logger.info("Settings applied")
+        """Apply the current settings."""
+        try:
+            self.theme_manager.apply_theme()
+            logger.info("Settings applied and theme updated.")
+        except Exception as e:
+            logger.error(f"Failed to apply settings: {e}")
         
     def check_for_updates(self):
         """Check for application updates and show the update dialog"""
@@ -1527,6 +1477,21 @@ class MainWindow(QMainWindow):
         dialog = SponsorDialog(self)
         dialog.exec()
         
+    def show_password_generator(self):
+        """Show the password generator dialog."""
+        dialog = PasswordGeneratorDialog(self)
+        dialog.exec()
+
+    def show_password_analyzer(self):
+        """Show the password analyzer dialog."""
+        QMessageBox.information(self, "Not Implemented", "The password analyzer is not yet implemented.")
+
+    def show_settings(self):
+        """Show the settings dialog."""
+        dialog = SettingsDialog(self)
+        dialog.settings_changed.connect(self._apply_settings)
+        dialog.exec()
+
     def open_wiki(self):
         # Open the application's wiki in the default web browser.
         from PySide6.QtGui import QDesktopServices

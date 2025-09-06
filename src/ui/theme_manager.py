@@ -1,5 +1,6 @@
 """Theme manager for the Password Manager application."""
-from PySide6.QtCore import QSettings, Signal, QObject
+from PySide6.QtCore import Signal, QObject
+from ..core.settings import settings_manager
 from PySide6.QtGui import QPalette, QColor, QIcon
 from PySide6.QtWidgets import QApplication, QStyleFactory
 
@@ -12,9 +13,8 @@ class ThemeManager(QObject):
         """Initialize the theme manager."""
         super().__init__()
         self.app = app
-        self.settings = QSettings("Nsfr750", "PasswordManager")
         self.available_themes = ["system", "light", "dark", "aqua"]
-        self.current_theme = self.settings.value("theme", "system")
+        self.current_theme = settings_manager.get("general.theme", "system")
         
     def apply_theme(self, theme_name: str = None):
         """Apply the specified theme.
@@ -26,7 +26,7 @@ class ThemeManager(QObject):
             theme_name = self.current_theme
         else:
             self.current_theme = theme_name
-            self.settings.setValue("theme", theme_name)
+            settings_manager.set("general.theme", theme_name)
         
         # Apply the theme
         if theme_name == "system":

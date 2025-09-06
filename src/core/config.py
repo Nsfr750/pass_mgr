@@ -120,6 +120,18 @@ def get_auth_token() -> Optional[str]:
     config = load_config()
     return config.get('auth', {}).get('token')
 
+def is_debug_menu_enabled() -> bool:
+    """Check if the debug menu is enabled in the config.
+
+    Returns:
+        bool: True if the debug menu is enabled, False otherwise
+    """
+    config = load_config()
+    # Check for both formats for backward compatibility and user convenience
+    if config.get('DEBUG') is True:
+        return True
+    return config.get('settings', {}).get('debug_menu', False)
+
 def set_auth_token(token: Optional[str]) -> bool:
     """Set the authentication token for the API.
     

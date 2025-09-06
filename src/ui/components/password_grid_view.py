@@ -347,6 +347,18 @@ class PasswordGridView(QScrollArea):
         # Set initial state
         self._update_empty_state()
     
+    def clear(self):
+        """Remove all cards from the grid."""
+        self._clear_cards()
+        self.entries.clear()
+        self._update_empty_state()
+
+    def add_item(self, entry: PasswordEntry):
+        """Add a card for a single password entry."""
+        self.entries.append(entry)
+        self._add_card(entry)
+        self._update_empty_state()
+
     def set_entries(self, entries: List[PasswordEntry]):
         """Set the password entries to display.
         

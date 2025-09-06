@@ -103,12 +103,16 @@ class SettingsDialog(QDialog):
         self.cancel_btn = QPushButton("Cancel")
         self.cancel_btn.clicked.connect(self.reject)
         
+        self.apply_btn = QPushButton("Apply")
+        self.apply_btn.clicked.connect(self._apply_settings)
+
         self.save_btn = QPushButton("Save Changes")
         self.save_btn.clicked.connect(self._save_settings)
         
         button_layout.addWidget(self.reset_btn)
         button_layout.addStretch()
         button_layout.addWidget(self.cancel_btn)
+        button_layout.addWidget(self.apply_btn)
         button_layout.addWidget(self.save_btn)
         
         layout.addLayout(button_layout)
@@ -143,6 +147,25 @@ class SettingsDialog(QDialog):
         db_path = settings_manager.get('database.path', '')
         self.db_path_edit.setText(db_path)
     
+    def _apply_settings(self):
+        """Apply settings without closing the dialog."""
+        # Theme
+        settings_manager.set('general.theme', self.theme_combo.currentText().lower())
+        
+        # Auto-lock timeout
+        settings_manager.set('general.auto_lock_timeout', self.lock_timeout.value())
+        
+        # Security settings
+        settings_manager.set('security.clear_clipboard', self.clear_clipboard.isChecked())
+        settings_manager.set('security.lock_on_minimize', self.lock_on_minimize.isChecked())
+        
+        # Database path
+        db_path = self.db_path_edit.text()
+        if db_path:
+            settings_manager.set('database.path', db_path)
+        
+        self.settings_changed.emit()
+
     def _save_settings(self):
         """Save settings from the UI."""
         # Theme
@@ -175,7 +198,7 @@ class SettingsDialog(QDialog):
         )
         
         if reply == QMessageBox.Yes:
-            self.settings.clear()
+            settings_manager.clear()
             self._load_settings()
     
     def _browse_database(self):

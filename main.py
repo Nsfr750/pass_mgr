@@ -11,7 +11,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent / "src"))
 
 from PySide6.QtWidgets import QApplication, QMessageBox
-from PySide6.QtCore import QSettings, QCoreApplication
+from PySide6.QtCore import QCoreApplication
 from PySide6.QtGui import QIcon
 
 from src.core.config import ensure_data_dir
@@ -36,9 +36,6 @@ def main():
             if hasattr(QApplication, 'setWindowIcon'):
                 QApplication.setWindowIcon(app_icon)
         
-        # Set up settings
-        settings = QSettings("Nsfr750", "PasswordManager")
-        
         try:
             # Ensure data directory exists
             ensure_data_dir()
@@ -49,8 +46,9 @@ def main():
             
             # Initialize theme manager and apply theme
             from src.ui.theme_manager import ThemeManager
+            from src.core.settings import settings_manager
             theme_manager = ThemeManager(app)
-            theme_manager.apply_theme(settings.value("theme", "system"))
+            theme_manager.apply_theme(settings_manager.get("general.theme", "dark"))
             
             # Initialize database
             db = DatabaseManager()
@@ -81,8 +79,8 @@ def main():
                     QMessageBox.warning(None, "Error", "Authentication is required to use the application.")
                     return 1
             
-            # Show the main window
-            window = MainWindow(db, app)
+            # Pass the authenticated db manager to the main window
+            window = MainWindow(db_manager=db, app=app)
             window.show()
             
             return app.exec()
