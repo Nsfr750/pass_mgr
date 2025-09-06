@@ -13,6 +13,14 @@ from .crypto import (
     verify_password
 )
 
+from .encryption import (
+    derive_key,
+    encrypt_data,
+    decrypt_data,
+    generate_salt,
+    AESGCM
+)
+
 from .clipboard import (
     SecureClipboard,
     clipboard,

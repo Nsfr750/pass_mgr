@@ -1,4 +1,5 @@
 """Database module for the Password Manager application."""
+import hmac
 import os
 import sqlite3
 from pathlib import Path
@@ -68,17 +69,60 @@ class DatabaseManager:
                     
                 salt = result[0]
                 
-                # Get the stored hash
+                # Get the stored hash and salt
                 cursor.execute('SELECT value FROM metadata WHERE key = ?', ('password_hash',))
-                result = cursor.fetchone()
-                if not result:
-                    logger.error("No password hash found in database")
+                hash_result = cursor.fetchone()
+                cursor.execute('SELECT value FROM metadata WHERE key = ?', ('password_salt',))
+                salt_result = cursor.fetchone()
+                
+                if not hash_result or not salt_result:
+                    logger.error("Password hash or salt not found in database")
                     return False
                     
-                stored_hash = result[0]
+                stored_hash = hash_result[0]
+                stored_salt = salt_result[0]
                 
-                # Verify the password
-                if not verify_password(stored_hash, password, salt):
+                logger.debug(f"Raw stored hash type: {type(stored_hash)}, length: {len(stored_hash) if hasattr(stored_hash, '__len__') else 'N/A'}")
+                logger.debug(f"Raw stored salt type: {type(stored_salt)}, length: {len(stored_salt) if hasattr(stored_salt, '__len__') else 'N/A'}")
+                
+                # If the stored hash is bytes, decode it to string
+                if isinstance(stored_hash, bytes):
+                    try:
+                        stored_hash = stored_hash.decode('utf-8')
+                        logger.debug("Decoded stored hash from bytes to UTF-8 string")
+                    except UnicodeDecodeError:
+                        # If it's not UTF-8, it might be base64 encoded
+                        import base64
+                        stored_hash = base64.b64encode(stored_hash).decode('utf-8')
+                        logger.debug("Encoded stored hash to base64 string")
+                
+                # If the stored salt is bytes, decode it to string
+                if isinstance(stored_salt, bytes):
+                    try:
+                        stored_salt = stored_salt.decode('utf-8')
+                        logger.debug("Decoded stored salt from bytes to UTF-8 string")
+                    except UnicodeDecodeError:
+                        # If it's not UTF-8, it might be base64 encoded
+                        import base64
+                        stored_salt = base64.b64encode(stored_salt).decode('utf-8')
+                        logger.debug("Encoded stored salt to base64 string")
+                
+                logger.debug(f"Verifying password with stored_hash: {stored_hash[:20]}... and stored_salt: {stored_salt[:20]}...")
+                
+                # Convert the stored salt from base64 to bytes
+                import base64
+                try:
+                    salt_bytes = base64.b64decode(stored_salt)
+                except Exception as e:
+                    logger.error(f"Failed to decode salt: {e}")
+                    return False
+                
+                # Generate a new hash with the provided password and stored salt
+                from src.core.security.crypto import DEFAULT_HASHER
+                new_hash, _ = DEFAULT_HASHER.hash_password(password, salt_bytes)
+                
+                # Compare the hashes
+                if not hmac.compare_digest(stored_hash, new_hash):
                     logger.warning("Password verification failed")
                     return False
                 
@@ -304,14 +348,17 @@ class DatabaseManager:
                         return False
                         
                     stored_hash = result[0]
-                    if not verify_password(stored_hash, old_password, salt):
+                    if not verify_password(old_password, stored_hash, salt):
                         return False
                     
                     # Get all entries to re-encrypt
                     entries = self.get_all_entries()
                 
-                # Generate new key and hash the password
+                # Generate new key and hash the password with the same salt
                 self.master_key, new_salt = self._generate_key(password)
+                # Convert the salt to base64 string for storage
+                import base64
+                salt_b64 = base64.b64encode(new_salt).decode('ascii')
                 password_hash, _ = hash_password(password, new_salt)
                 
                 # Store the new password hash and salt
@@ -320,7 +367,7 @@ class DatabaseManager:
                     VALUES (?, ?), (?, ?)
                 ''', (
                     'password_hash', password_hash,
-                    'password_salt', new_salt
+                    'password_salt', salt_b64
                 ))
                 
                 # If we had entries, re-encrypt them with the new key

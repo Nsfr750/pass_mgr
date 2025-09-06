@@ -8,7 +8,7 @@ from PySide6.QtGui import QIcon, QAction, QPixmap, QPainter, QColor, QLinearGrad
 from typing import List, Optional, Dict, Any
 import logging
 
-from ....core.models import PasswordEntry
+from src.core.models import PasswordEntry
 
 logger = logging.getLogger(__name__)
 

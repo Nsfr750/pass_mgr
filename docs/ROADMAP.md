@@ -29,6 +29,9 @@ Create a secure, user-friendly, and feature-rich password manager that helps use
 - [x] Clipboard auto-clear
 - [x] Password breach monitoring
 - [x] Native messaging host for secure communication
+- [x] Emergency access
+- [x] Password audit tool
+- [x] Duplicate password detection
 
 ### Import/Export
 - [x] CSV import/export
@@ -46,18 +49,14 @@ Create a secure, user-friendly, and feature-rich password manager that helps use
 
 ## 📅 Future Versions
 
-### v1.1.0 (Q4 2025)
+### v1.1.0 (Q4 2026)
 - [ ] Biometric authentication
 - [ ] Two-factor authentication support
 - [ ] Password health recommendations
 - [ ] Emergency access improvements
 - [ ] Automatic password changing
 
-### v1.2.0 (Q1 2026)
-- Password audit tool
-- Duplicate password detection
-- Password sharing with expiry
-- Emergency access
+### v1.2.0 (Q4 2026)
 
 ## 🔧 Technical Debt & Improvements
 - [ ] Improve test coverage

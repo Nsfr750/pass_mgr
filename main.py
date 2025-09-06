@@ -43,8 +43,9 @@ def main():
             # Ensure data directory exists
             ensure_data_dir()
             
-            # Set up logging
-            logger = setup_logging(log_level=logging.INFO, log_file='auto')
+            # Set up logging with DEBUG level for troubleshooting
+            logger = setup_logging(log_level=logging.DEBUG, log_file='auto')
+            logger.debug("Debug logging enabled")
             
             # Initialize theme manager and apply theme
             from src.ui.theme_manager import ThemeManager

@@ -5,8 +5,13 @@ import ctypes
 import hashlib
 import hmac
 import secrets
+import base64
+import logging
 from typing import Tuple, Optional, Union, Any
 from dataclasses import dataclass
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # Try to import argon2-cffi, fallback to hashlib if not available
 try:
@@ -176,15 +181,18 @@ class SecureHasher:
         """Generate a cryptographically secure random salt."""
         return secrets.token_bytes(self.salt_len)
     
-    def hash_password(self, password: Union[str, bytes, SecureBytes]) -> Tuple[bytes, bytes]:
-        """Hash a password with a random salt.
+    def hash_password(self, password: Union[str, bytes, SecureBytes], salt: Optional[bytes] = None) -> Tuple[bytes, bytes]:
+        """Hash a password with a random salt or a provided salt.
         
         Args:
             password: The password to hash (as string, bytes, or SecureBytes)
+            salt: Optional salt to use (as bytes). If not provided, a new one will be generated.
             
         Returns:
             Tuple of (hash, salt) as bytes
         """
+        logger.debug(f"Hashing password with salt type: {type(salt) if salt is not None else 'None'}")
+        
         # Convert password to bytes if it's a string
         if isinstance(password, str):
             password_bytes = password.encode('utf-8')
@@ -193,77 +201,66 @@ class SecureHasher:
         else:
             password_bytes = password
         
-        salt = self._generate_salt()
-        
-        # Use Argon2 if available, otherwise fall back to PBKDF2
-        if HAS_ARGON2:
-            # Use Argon2id (recommended for password hashing)
-            hasher = argon2.PasswordHasher(
-                time_cost=self.time_cost,
-                memory_cost=self.memory_cost,
-                parallelism=self.parallelism,
-                hash_len=self.hash_len,
-                salt_len=self.salt_len
-            )
-            
-            # Hash the password
+        # Use provided salt or generate a new one
+        if salt is None:
+            salt = self._generate_salt()
+            logger.debug(f"Generated new salt: {salt.hex()}")
+        elif isinstance(salt, str):
+            # If salt is a string, try to decode it as base64
             try:
-                # Convert the hash string back to bytes for consistency
-                hash_str = hasher.hash(password_bytes, salt=salt)
-                # Extract the hash part from the string
-                # Format: $argon2id$v=19$m=65536,t=3,p=4$...$...
-                hash_part = hash_str.split('$')[-1]
-                hash_bytes = base64.b64decode(hash_part + '==')  # Add padding if needed
-                return hash_bytes, salt
+                import base64
+                salt = base64.b64decode(salt)
+                logger.debug("Decoded salt from base64 string")
             except Exception as e:
-                logger.warning(f"Argon2 hashing failed, falling back to PBKDF2: {e}")
+                # If not base64, just encode as utf-8
+                logger.debug("Salt is not base64, encoding as utf-8")
+                salt = salt.encode('utf-8')
         
-        # Fallback to PBKDF2-HMAC-SHA256
+        logger.debug(f"Using salt (first 16 bytes): {salt[:16].hex() if hasattr(salt, '__getitem__') else salt}")
+        
+        # Always use PBKDF2-HMAC-SHA256 for consistency
         return self._pbkdf2_hmac_sha256(password_bytes, salt)
     
     def verify_password(
         self, 
         password: Union[str, bytes, SecureBytes], 
-        stored_hash: bytes, 
-        salt: bytes
+        stored_hash: Union[str, bytes], 
+        salt: Union[str, bytes]
     ) -> bool:
         """Verify a password against a stored hash and salt.
         
         Args:
             password: The password to verify
-            stored_hash: The stored hash to compare against
-            salt: The salt used when hashing the password
+            stored_hash: The stored hash to compare against (can be str or bytes)
+            salt: The salt used when hashing the password (can be str or bytes)
             
         Returns:
             True if the password matches, False otherwise
         """
-        # Convert password to bytes if it's a string
-        if isinstance(password, str):
-            password_bytes = password.encode('utf-8')
-        elif isinstance(password, SecureBytes):
-            password_bytes = password.get_bytes()
-        else:
-            password_bytes = password
-        
-        # Try Argon2 first if available
-        if HAS_ARGON2:
-            try:
-                hasher = argon2.PasswordHasher()
-                # Reconstruct the hash string
-                hash_str = (
-                    f"$argon2id$v=19$m={self.memory_cost},t={self.time_cost},p={self.parallelism}$"
-                    f"{base64.b64encode(salt).decode('ascii').rstrip('=')}$"
-                    f"{base64.b64encode(stored_hash).decode('ascii').rstrip('=')}"
-                )
-                return hasher.verify(hash_str, password_bytes)
-            except (argon2.exceptions.VerifyMismatchError, argon2.exceptions.VerificationError):
-                return False
-            except Exception as e:
-                logger.warning(f"Argon2 verification failed, falling back to PBKDF2: {e}")
-        
-        # Fallback to PBKDF2-HMAC-SHA256
-        computed_hash, _ = self._pbkdf2_hmac_sha256(password_bytes, salt)
-        return hmac.compare_digest(computed_hash, stored_hash)
+        try:
+            logger.debug(f"Verifying password with salt type: {type(salt)}, length: {len(salt) if hasattr(salt, '__len__') else 'N/A'}")
+            
+            # Generate a new hash with the provided password and salt
+            new_hash, _ = self.hash_password(password, salt)
+            
+            # Convert both hashes to bytes for comparison
+            if isinstance(stored_hash, str):
+                import base64
+                stored_hash = base64.b64decode(stored_hash)
+            if isinstance(new_hash, str):
+                import base64
+                new_hash = base64.b64decode(new_hash)
+            
+            logger.debug(f"Stored hash (first 16 bytes): {stored_hash[:16].hex() if hasattr(stored_hash, '__getitem__') else stored_hash}")
+            logger.debug(f"New hash (first 16 bytes): {new_hash[:16].hex() if hasattr(new_hash, '__getitem__') else new_hash}")
+            
+            # Compare the hashes
+            result = hmac.compare_digest(stored_hash, new_hash)
+            logger.debug(f"Hash comparison result: {result}")
+            return result
+        except Exception as e:
+            logger.error(f"Error verifying password: {e}", exc_info=True)
+            return False
     
     def _pbkdf2_hmac_sha256(
         self, 
