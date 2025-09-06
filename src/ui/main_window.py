@@ -1263,7 +1263,7 @@ class MainWindow(QMainWindow):
         length = len(password)
         
         # Length score (up to 40 points)
-        score += min(40.0, (length / 12) * 40)
+        score += min(40.0, (length / 12.0) * 40.0)
         
         # Character variety (up to 30 points)
         has_lower = any(c.islower() for c in password)
