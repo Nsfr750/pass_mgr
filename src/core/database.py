@@ -121,6 +121,12 @@ class DatabaseManager:
                 from src.core.security.crypto import DEFAULT_HASHER
                 new_hash, _ = DEFAULT_HASHER.hash_password(password, salt_bytes)
                 
+                # Ensure both hashes are bytes for comparison
+                if isinstance(stored_hash, str):
+                    stored_hash = stored_hash.encode('utf-8')
+                if isinstance(new_hash, str):
+                    new_hash = new_hash.encode('utf-8')
+                
                 # Compare the hashes
                 if not hmac.compare_digest(stored_hash, new_hash):
                     logger.warning("Password verification failed")
