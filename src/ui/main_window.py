@@ -1037,16 +1037,9 @@ class MainWindow(QMainWindow):
     
     def export_entries(self):
         """Export all entries to a CSV file."""
-        # Get entries directly from database
-        entries = self.db.get_all_entries()
-        if not entries:
-            QMessageBox.information(self, "No Entries", "There are no entries to export.")
-            return
-            
-        # Get save file path
         file_path, _ = QFileDialog.getSaveFileName(
             self,
-            "Export Entries",
+            "Export Passwords to CSV",
             "passwords_export.csv",
             "CSV Files (*.csv)"
         )
@@ -1080,20 +1073,9 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(
                 self,
-    
-    if not file_path:
-        return  # User cancelled
-    
-    def show_settings(self):
-        """Show the settings dialog."""
-        from .settings_dialog import show_settings_dialog
-        
-        # Show the settings dialog
-        result = show_settings_dialog(self)
-        
-        # If settings were saved, apply them
-        if result == QDialog.Accepted:
-            self._apply_settings()
+                "Export Failed",
+                f"Failed to export entries: {str(e)}"
+            )
     
     def _apply_settings(self):
         """Apply the current settings."""
