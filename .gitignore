@@ -182,5 +182,7 @@ cython_debug/
 
 # Mixed
 INFO.txt
+data/
+data/*.db
 PASS/
 PASS/*.csv
