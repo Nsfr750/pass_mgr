@@ -56,7 +56,7 @@ Create a secure, user-friendly, and feature-rich password manager that helps use
 - [ ] Emergency access improvements
 - [ ] Automatic password changing
 
-### v1.2.0 (Q4 2026)
+### v1.2.0 (Q1 2027)
 
 ## 🔧 Technical Debt & Improvements
 - [ ] Improve test coverage
