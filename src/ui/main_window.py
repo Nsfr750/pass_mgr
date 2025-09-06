@@ -1023,7 +1023,7 @@ class MainWindow(QMainWindow):
             index: Optional QModelIndex of the item to delete (for grid view)
             entry_id: Optional ID of the entry to delete (for list view)
             skip_confirm: If True, skip confirmation dialog (use with caution)
-        ""
+        """
         try:
             # Get the entry ID to delete
             if entry_id is None and index is not None:
@@ -1157,6 +1157,9 @@ class MainWindow(QMainWindow):
                     "error"
                 )
                 
+            finally:
+                # Ensure loading indicator is hidden
+                feedback.show_loading(show=False)
         except Exception as e:
             logger.error(f"Unexpected error in delete_entry: {str(e)}", exc_info=True)
             feedback.show_message(
@@ -1164,17 +1167,8 @@ class MainWindow(QMainWindow):
                 "Error",
                 "error"
             )
-            
-        finally:
-            # Ensure loading indicator is hidden
-            feedback.show_loading(show=False)
 
     def refresh_dashboard(self):
-        """Update the password health dashboard.
-        
-        This method calculates password metrics and updates the dashboard
-        if it's currently visible.
-        """
         if not hasattr(self, 'dashboard_visible') or not self.dashboard_visible:
             return
 
@@ -1186,11 +1180,7 @@ class MainWindow(QMainWindow):
             logger.error("Failed to refresh dashboard: %s", str(e))
 
     def _calculate_password_metrics(self):
-        """Calculate password health metrics.
         
-        Returns:
-            PasswordHealthMetrics: Object containing password health metrics
-        """
         from datetime import datetime
         
         metrics = PasswordHealthMetrics()
@@ -1243,19 +1233,7 @@ class MainWindow(QMainWindow):
         return metrics
     
     def _calculate_password_strength(self, password):
-        """Calculate password strength on a scale of 0-100.
         
-        The score is based on:
-        - Length (up to 40 points)
-        - Character variety (up to 30 points)
-        - Entropy (up to 30 points)
-        
-        Args:
-            password (str): The password to evaluate
-            
-        Returns:
-            int: Password strength score (0-100)
-        """
         if not password:
             return 0
             
@@ -1292,11 +1270,7 @@ class MainWindow(QMainWindow):
         return min(100, int(round(score)))
     
     def toggle_dashboard(self, checked):
-        """Toggle the visibility of the password health dashboard.
-        
-        Args:
-            checked (bool): Whether to show or hide the dashboard
-        """
+
         self.dashboard_visible = checked
         
         if checked:
@@ -1323,11 +1297,7 @@ class MainWindow(QMainWindow):
     
     @with_loading_indicator("Switching view...", "Failed to switch view")
     def set_view_mode(self, mode):
-        """Set the current view mode.
-        
-        Args:
-            mode (str): The view mode to set ('list' or 'grid')
-        """
+
         if mode not in ['list', 'grid']:
             logger.warning("Invalid view mode: %s", mode)
             return
@@ -1379,11 +1349,7 @@ class MainWindow(QMainWindow):
             raise  # Re-raise to allow with_loading_indicator to handle it
     
     def _save_view_preference(self, mode):
-        """Save the user's view preference.
-        
-        Args:
-            mode (str): The view mode to save ('list' or 'grid')
-        """
+
         try:
             if hasattr(self, 'config') and self.config:
                 self.config.set('ui', 'default_view', mode)
@@ -1393,7 +1359,6 @@ class MainWindow(QMainWindow):
             logger.warning("Failed to save view preference: %s", str(e))
     
     def _update_button_states(self):
-        """Update the enabled state of action buttons based on selection."""
         # Check if any rows are selected in the table
         has_selection = len(self.table.selectionModel().selectedRows()) > 0
             
@@ -1403,11 +1368,11 @@ class MainWindow(QMainWindow):
             self.toolbar.delete_btn.setEnabled(has_selection)
     
     def filter_entries(self, text):
-        """Filter the password entries based on search text."""
+        # Filter the password entries based on search text
         self.refresh_entries(text)
     
     def export_entries(self):
-        """Export all entries to a CSV file."""
+        # Export all entries to a CSV file
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "Export Passwords to CSV",
@@ -1449,13 +1414,13 @@ class MainWindow(QMainWindow):
             )
     
     def _apply_settings(self):
-        """Apply the current settings."""
+        # Apply the current settings
         # This method will be called when settings are changed
         # You can add code here to apply settings like theme changes, etc.
         logger.info("Settings applied")
         
     def check_for_updates(self):
-        """Check for application updates and show the update dialog."""
+        """Check for application updates and show the update dialog"""
         try:
             from .updates import check_for_updates
             check_for_updates(self)
@@ -1468,13 +1433,13 @@ class MainWindow(QMainWindow):
             )
         
     def show_sponsor_dialog(self):
-        """Show the sponsor dialog."""
+        # Show the sponsor dialog.
         from .sponsor import SponsorDialog
         dialog = SponsorDialog(self)
         dialog.exec()
         
     def open_wiki(self):
-        """Open the application's wiki in the default web browser."""
+        # Open the application's wiki in the default web browser.
         from PySide6.QtGui import QDesktopServices
         from PySide6.QtCore import QUrl
         
@@ -1488,7 +1453,7 @@ class MainWindow(QMainWindow):
             )
             
     def open_issues(self):
-        """Open the application's issues page in the default web browser."""
+        # Open the application's issues page in the default web browser
         from PySide6.QtGui import QDesktopServices
         from PySide6.QtCore import QUrl
         
