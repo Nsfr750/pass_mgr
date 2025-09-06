@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime
 import json
+import shutil
 
 # Local imports
 from .config import get_database_path
@@ -436,6 +437,86 @@ class DatabaseManager:
             
         except Exception as e:
             logger.error(f"Error setting master password: {e}")
+            return False
+    
+    def create_backup(self, backup_path: str) -> bool:
+        """Create a backup of the database.
+        
+        Args:
+            backup_path: Path where to save the backup
+            
+        Returns:
+            bool: True if backup was successful, False otherwise
+        """
+        try:
+            # Ensure the database is properly closed before copying
+            if hasattr(self, 'conn') and self.conn:
+                self.conn.close()
+            
+            # Copy the database file to the backup location
+            import shutil
+            shutil.copy2(self.db_path, backup_path)
+            
+            # Reopen the database connection
+            self.conn = sqlite3.connect(str(self.db_path))
+            self.conn.row_factory = sqlite3.Row
+            
+            logger.info(f"Database backup created at {backup_path}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error creating database backup: {e}")
+            # Try to reconnect to the database if backup failed
+            try:
+                self.conn = sqlite3.connect(str(self.db_path))
+                self.conn.row_factory = sqlite3.Row
+            except:
+                pass
+            return False
+    
+    def restore_backup(self, backup_path: str) -> bool:
+        """Restore the database from a backup.
+        
+        Args:
+            backup_path: Path to the backup file
+            
+        Returns:
+            bool: True if restore was successful, False otherwise
+        """
+        try:
+            # Close the current connection
+            if hasattr(self, 'conn') and self.conn:
+                self.conn.close()
+            
+            # Create a backup of the current database before restoring
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_dir = self.db_path.parent / 'backups'
+            backup_dir.mkdir(exist_ok=True)
+            
+            current_backup = backup_dir / f"pre_restore_{timestamp}.db"
+            shutil.copy2(self.db_path, current_backup)
+            
+            # Copy the backup file to the database location
+            shutil.copy2(backup_path, self.db_path)
+            
+            # Reopen the database connection
+            self.conn = sqlite3.connect(str(self.db_path))
+            self.conn.row_factory = sqlite3.Row
+            
+            logger.info(f"Database restored from backup: {backup_path}")
+            logger.info(f"Previous database backed up to: {current_backup}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error restoring database from backup: {e}")
+            # Try to reconnect to the original database if restore failed
+            try:
+                if 'current_backup' in locals() and current_backup.exists():
+                    shutil.copy2(current_backup, self.db_path)
+                self.conn = sqlite3.connect(str(self.db_path))
+                self.conn.row_factory = sqlite3.Row
+            except:
+                pass
             return False
     
     def _save_entry(self, conn: sqlite3.Connection, entry: PasswordEntry) -> None:

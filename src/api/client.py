@@ -16,7 +16,7 @@ from functools import wraps
 import requests
 from urllib.parse import urljoin
 
-from ..core.config import get_api_url, get_auth_token, get_config
+from ..core.config import get_api_url, get_auth_token, load_config
 
 logger = logging.getLogger(__name__)
 

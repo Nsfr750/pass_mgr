@@ -13,8 +13,9 @@ from PySide6.QtWidgets import (
     QProgressDialog, QStatusBar, QSplitter, QMenu, QSizePolicy,
     QToolBar, QInputDialog, QDialog, QDialogButtonBox, QFormLayout,
     QCheckBox, QComboBox, QTabWidget, QGroupBox, QScrollArea,
-    QStackedWidget, QFrame, QToolTip, QApplication, QActionGroup
+    QStackedWidget, QFrame, QToolTip, QApplication
 )
+from PySide6.QtGui import QActionGroup
 
 from .toolbar import MainToolBar
 from PySide6.QtCore import (
@@ -38,7 +39,7 @@ from pathlib import Path
 import logging
 
 from ..core.models import PasswordEntry
-from ..core.importers import get_importers, get_importers_for_file
+from ..core.importers import get_importers, get_importers_for_file, AVAILABLE_IMPORT_OPTIONS
 
 logger = logging.getLogger(__name__)
 
@@ -367,9 +368,12 @@ class MainWindow(QMainWindow):
         
         # Add importers to the menu
         for importer in get_importers():
-            action = QAction(importer.name, self)
-            action.triggered.connect(lambda _, i=importer: self._show_import_dialog(i))
-            import_menu.addAction(action)
+            # Find the importer in AVAILABLE_IMPORT_OPTIONS to get its display name
+            importer_info = next((i for i in AVAILABLE_IMPORT_OPTIONS if i['importer'] == importer.__class__), None)
+            if importer_info:
+                action = QAction(importer_info['name'], self)
+                action.triggered.connect(lambda _, i=importer: self._show_import_dialog(i))
+                import_menu.addAction(action)
         
         # Backup/Restore
         file_menu.addSeparator()
@@ -1411,6 +1415,91 @@ class MainWindow(QMainWindow):
                 self,
                 "Export Failed",
                 f"Failed to export entries: {str(e)}"
+            )
+    
+    def create_backup(self):
+        """Create a backup of the database."""
+        try:
+            # Get the default backup directory
+            backup_dir = Path.home() / "Documents" / "PasswordManagerBackups"
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Create a timestamped backup filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            default_path = str(backup_dir / f"password_manager_backup_{timestamp}.db")
+            
+            # Show file dialog to choose backup location
+            file_path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Create Backup",
+                default_path,
+                "Database Files (*.db);;All Files (*)"
+            )
+            
+            if file_path:
+                # Ensure the file has the .db extension
+                if not file_path.lower().endswith('.db'):
+                    file_path += '.db'
+                
+                # Create the backup
+                self.db.create_backup(file_path)
+                QMessageBox.information(
+                    self,
+                    "Backup Created",
+                    f"Backup successfully created at:\n{file_path}"
+                )
+                
+        except Exception as e:
+            logger.error(f"Error creating backup: {e}")
+            QMessageBox.critical(
+                self,
+                "Backup Failed",
+                f"Failed to create backup:\n{str(e)}"
+            )
+    
+    def restore_backup(self):
+        """Restore the database from a backup."""
+        try:
+            # Show confirmation dialog
+            reply = QMessageBox.warning(
+                self,
+                "Confirm Restore",
+                "WARNING: This will replace your current database with the backup.\n"
+                "Make sure you have a backup of your current data before proceeding.\n\n"
+                "Are you sure you want to continue?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            
+            if reply == QMessageBox.Yes:
+                # Show file dialog to select backup file
+                file_path, _ = QFileDialog.getOpenFileName(
+                    self,
+                    "Select Backup File",
+                    "",
+                    "Database Files (*.db);;All Files (*)"
+                )
+                
+                if file_path:
+                    # Restore the backup
+                    self.db.restore_backup(file_path)
+                    QMessageBox.information(
+                        self,
+                        "Restore Successful",
+                        "Database has been successfully restored from backup.\n"
+                        "The application will now restart to apply changes.",
+                        QMessageBox.Ok
+                    )
+                    
+                    # Restart the application
+                    QApplication.quit()
+                    
+        except Exception as e:
+            logger.error(f"Error restoring backup: {e}")
+            QMessageBox.critical(
+                self,
+                "Restore Failed",
+                f"Failed to restore from backup:\n{str(e)}"
             )
     
     def _apply_settings(self):

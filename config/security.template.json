@@ -3,7 +3,7 @@
     "rate_limiting": {
       "enabled": true,
       "max_requests_per_minute": 100,
-      "whitelisted_ips": ["127.0.0.1", "192.168.1.0/24"],
+      "whitelisted_ips": ["127.0.0.1", "192.168.0.0/24", "192.168.1.0/24", "10.0.0.0/8"],
       "emergency_ips": ["192.168.1.100"]
     },
     "audit_log": {
@@ -13,6 +13,8 @@
       "backup_count": 5
     },
     "ip_whitelist": [
+      "127.0.0.1",
+      "192.168.0.0/24",
       "192.168.1.0/24",
       "10.0.0.0/8"
     ]
