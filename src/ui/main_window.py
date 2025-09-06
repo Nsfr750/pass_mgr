@@ -5,9 +5,10 @@ This module provides the main application window with a modern UI,
 including a password list, search functionality, and various tools
 for managing password entries.
 """
+
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QTableWidget, QTableWidgetItem, QHeaderView, QFileDialog, 
+    QTableWidget, QTableWidgetItem, QHeaderView, QFileDialog,
     QMessageBox, QAbstractItemView, QLineEdit, QLabel,
     QProgressDialog, QStatusBar, QSplitter, QMenu, QSizePolicy,
     QToolBar, QInputDialog, QDialog, QDialogButtonBox, QFormLayout,
@@ -1022,7 +1023,7 @@ class MainWindow(QMainWindow):
             index: Optional QModelIndex of the item to delete (for grid view)
             entry_id: Optional ID of the entry to delete (for list view)
             skip_confirm: If True, skip confirmation dialog (use with caution)
-        """
+        ""
         try:
             # Get the entry ID to delete
             if entry_id is None and index is not None:
@@ -1032,8 +1033,28 @@ class MainWindow(QMainWindow):
             
             # Get entry details for confirmation message
             entry = None
+            entry_ids = []
+            
             if entry_id:
+                # Single entry deletion
                 entry = self.db.get_entry(entry_id)
+                if not entry:
+                    feedback.show_message("Entry not found", "Error", "error")
+                    return
+                entry_ids = [entry_id]
+            else:
+                # Multiple entries deletion (from table selection)
+                selected_rows = set()
+                for item in self.table_widget.selectedItems():
+                    selected_rows.add(item.row())
+                
+                if not selected_rows:
+                    feedback.show_message("No entries selected", "Information", "info")
+                    return
+                
+                for row in selected_rows:
+                    entry_id = self.entries[row].id
+                    entry_ids.append(entry_id)
             
             # If not skipping confirmation, show detailed confirmation dialog
             if not skip_confirm:
@@ -1041,7 +1062,8 @@ class MainWindow(QMainWindow):
                 confirm_dialog.setIcon(QMessageBox.Warning)
                 confirm_dialog.setWindowTitle("Confirm Deletion")
                 
-                if entry:
+                if len(entry_ids) == 1 and entry:
+                    # Single entry confirmation
                     confirm_dialog.setText(
                         f"<b>Are you sure you want to delete this entry?</b>"
                         f"<br><br>"
@@ -1050,8 +1072,9 @@ class MainWindow(QMainWindow):
                         f"<b>URL:</b> {entry.url or 'N/A'}"
                     )
                 else:
+                    # Multiple entries confirmation
                     confirm_dialog.setText(
-                        "<b>Are you sure you want to delete the selected entries?</b>"
+                        f"<b>Are you sure you want to delete {len(entry_ids)} selected entries?</b>"
                         "<br><br>"
                         "This action cannot be undone."
                     )
@@ -1060,9 +1083,9 @@ class MainWindow(QMainWindow):
                     "This action cannot be undone. The entry will be permanently deleted."
                 )
                 confirm_dialog.setStandardButtons(
-                    QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
+                    QMessageBox.Yes | QMessageBox.Cancel
                 )
-                confirm_dialog.setDefaultButton(QMessageBox.No)
+                confirm_dialog.setDefaultButton(QMessageBox.Cancel)
                 confirm_dialog.setEscapeButton(QMessageBox.Cancel)
                 
                 # Add a checkbox to confirm deletion
@@ -1094,66 +1117,89 @@ class MainWindow(QMainWindow):
             # Show loading indicator
             feedback.show_loading("Deleting entry...")
             
-            QMessageBox.warning(self, "Delete Entry", "No entries selected for deletion.")
-            return
-        
-        # Confirm deletion
-        reply = QMessageBox.question(
-            self,
-            "Delete Entries",
-            f"Are you sure you want to delete {len(entry_ids)} selected entry(ies)?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-        
-        if reply == QMessageBox.Yes:
             try:
-                # Delete the entries
+                # Perform the deletion
                 success_count = 0
-                for entry_id in entry_ids:
-                    if self.db.delete_entry(entry_id):
+                for eid in entry_ids:
+                    try:
+                        self.db.delete_entry(eid)
                         success_count += 1
+                    except Exception as e:
+                        logger.error(f"Error deleting entry {eid}: {str(e)}")
                 
-                # Refresh the views
-                self.refresh_entries()
-                
-                # Show status message
-                if success_count > 0:
-                    self.statusBar().showMessage(
-                        f"Successfully deleted {success_count} out of {len(entry_ids)} selected entries.",
-                        3000
+                # Show appropriate feedback
+                if success_count == 0:
+                    feedback.show_message(
+                        "Failed to delete entries. See logs for details.",
+                        "Error",
+                        "error"
+                    )
+                elif success_count == len(entry_ids):
+                    feedback.show_message(
+                        f"Successfully deleted {success_count} entry(ies)",
+                        "Success"
                     )
                 else:
-                    QMessageBox.warning(
-                        self,
-                        "Error",
-                        "Failed to delete entries. Please check the logs for details."
+                    feedback.show_message(
+                        f"Deleted {success_count} of {len(entry_ids)} entries. Some deletions failed.",
+                        "Partial Success",
+                        "warning"
                     )
-                    
+                
+                # Refresh the view
+                self.refresh_entries()
+                
             except Exception as e:
-                logger.error(f"Error deleting entries: {e}")
-                QMessageBox.critical(
-                    self,
+                logger.error(f"Error during deletion: {str(e)}", exc_info=True)
+                feedback.show_message(
+                    f"An error occurred while deleting entries: {str(e)}",
                     "Error",
-                    f"Failed to delete entries: {str(e)}"
+                    "error"
                 )
-    
+                
+        except Exception as e:
+            logger.error(f"Unexpected error in delete_entry: {str(e)}", exc_info=True)
+            feedback.show_message(
+                f"An unexpected error occurred: {str(e)}",
+                "Error",
+                "error"
+            )
+            
+        finally:
+            # Ensure loading indicator is hidden
+            feedback.show_loading(show=False)
+
     def refresh_dashboard(self):
-        """Update the password health dashboard."""
-        if hasattr(self, 'dashboard_visible') and self.dashboard_visible:
+        """Update the password health dashboard.
+        
+        This method calculates password metrics and updates the dashboard
+        if it's currently visible.
+        """
+        if not hasattr(self, 'dashboard_visible') or not self.dashboard_visible:
+            return
+
+        try:
             metrics = self._calculate_password_metrics()
-            self.dashboard.update_metrics(metrics)
-    
+            if hasattr(self, 'dashboard') and self.dashboard:
+                self.dashboard.update_metrics(metrics)
+        except Exception as e:
+            logger.error("Failed to refresh dashboard: %s", str(e))
+
     def _calculate_password_metrics(self):
-        """Calculate password health metrics."""
+        """Calculate password health metrics.
+        
+        Returns:
+            PasswordHealthMetrics: Object containing password health metrics
+        """
         from datetime import datetime
+        
         metrics = PasswordHealthMetrics()
+        if not hasattr(self, 'entries') or not self.entries:
+            return metrics
+            
         metrics.total_entries = len(self.entries)
         
-        if not self.entries:
-            return metrics
-        
-        # Analyze passwords
+        # Initialize analysis variables
         password_strengths = []
         password_ages = []
         password_hashes = set()
@@ -1170,16 +1216,18 @@ class MainWindow(QMainWindow):
             
             # Track password age
             if hasattr(entry, 'updated_at') and entry.updated_at:
-                if isinstance(entry.updated_at, str):
-                    try:
+                try:
+                    if isinstance(entry.updated_at, str):
                         updated_at = datetime.fromisoformat(entry.updated_at)
                         age_days = (datetime.now() - updated_at).days
                         password_ages.append(age_days)
-                    except (ValueError, TypeError):
-                        pass
-                elif hasattr(entry.updated_at, 'timestamp'):
-                    age_days = (datetime.now() - entry.updated_at).days
-                    password_ages.append(age_days)
+                    elif hasattr(entry.updated_at, 'timestamp'):
+                        age_days = (datetime.now() - datetime.fromtimestamp(
+                            entry.updated_at.timestamp()
+                        )).days
+                        password_ages.append(age_days)
+                except (ValueError, TypeError, AttributeError) as e:
+                    logger.debug("Error processing password age: %s", str(e))
         
         # Calculate metrics
         if password_strengths:
@@ -1195,18 +1243,27 @@ class MainWindow(QMainWindow):
         return metrics
     
     def _calculate_password_strength(self, password):
-        """Calculate password strength (0-100)."""
+        """Calculate password strength on a scale of 0-100.
+        
+        The score is based on:
+        - Length (up to 40 points)
+        - Character variety (up to 30 points)
+        - Entropy (up to 30 points)
+        
+        Args:
+            password (str): The password to evaluate
+            
+        Returns:
+            int: Password strength score (0-100)
+        """
         if not password:
             return 0
             
-        score = 0
+        score = 0.0
+        length = len(password)
         
         # Length score (up to 40 points)
-        length = len(password)
-        if length >= 12:
-            score += 40
-        else:
-            score += (length / 12) * 40
+        score += min(40.0, (length / 12) * 40)
         
         # Character variety (up to 30 points)
         has_lower = any(c.islower() for c in password)
@@ -1214,8 +1271,8 @@ class MainWindow(QMainWindow):
         has_digit = any(c.isdigit() for c in password)
         has_special = any(not c.isalnum() for c in password)
         
-        variety = sum([has_lower, has_upper, has_digit, has_special])
-        score += (variety / 4) * 30
+        variety = sum((has_lower, has_upper, has_digit, has_special))
+        score += (variety / 4.0) * 30.0
         
         # Entropy (up to 30 points)
         char_set = 0
@@ -1230,61 +1287,110 @@ class MainWindow(QMainWindow):
             
         if char_set > 0:
             entropy = length * (char_set ** 0.5)
-            score += min(30, (entropy / 50) * 30)
+            score += min(30.0, (entropy / 50.0) * 30.0)
         
-        return min(100, int(score))
+        return min(100, int(round(score)))
     
     def toggle_dashboard(self, checked):
-        """Toggle the visibility of the password health dashboard in a separate window."""
+        """Toggle the visibility of the password health dashboard.
+        
+        Args:
+            checked (bool): Whether to show or hide the dashboard
+        """
         self.dashboard_visible = checked
         
         if checked:
-            # Create and show the dashboard window if it doesn't exist
-            if not hasattr(self, 'dashboard_window'):
-                from .dashboard import show_dashboard_window
-                self.dashboard_window = show_dashboard_window(self)
-                self.dashboard_window.destroyed.connect(self._on_dashboard_closed)
-            else:
-                self.dashboard_window.show()
-                self.dashboard_window.activateWindow()
-            self.refresh_dashboard()
+            try:
+                if not hasattr(self, 'dashboard_window'):
+                    from .dashboard import show_dashboard_window
+                    self.dashboard_window = show_dashboard_window(self)
+                    self.dashboard_window.destroyed.connect(
+                        self._on_dashboard_closed
+                    )
+                else:
+                    self.dashboard_window.show()
+                    self.dashboard_window.activateWindow()
+                self.refresh_dashboard()
+            except Exception as e:
+                logger.error("Failed to show dashboard: %s", str(e))
+                feedback.show_message(
+                    "Failed to open dashboard. Check logs for details.",
+                    "Error",
+                    "error"
+                )
         elif hasattr(self, 'dashboard_window') and self.dashboard_window:
             self.dashboard_window.close()
     
-    def _on_dashboard_closed(self):
-        """Handle dashboard window being closed."""
-        if hasattr(self, 'dashboard_window'):
-            self.dashboard_window = None
-        if hasattr(self, 'dashboard_btn') and self.dashboard_btn.isChecked():
-            self.dashboard_btn.setChecked(False)
-    
+    @with_loading_indicator("Switching view...", "Failed to switch view")
     def set_view_mode(self, mode):
-        """Set the current view mode (list or grid)."""
-        if not hasattr(self, 'current_view') or self.current_view != mode:
-            self.current_view = mode
+        """Set the current view mode.
+        
+        Args:
+            mode (str): The view mode to set ('list' or 'grid')
+        """
+        if mode not in ['list', 'grid']:
+            logger.warning("Invalid view mode: %s", mode)
+            return
             
+        self.current_view = mode
+        
+        try:
+            # Update the view toggle button state
+            if hasattr(self, 'view_toggle'):
+                self.view_toggle.set_view(mode)
+            
+            # Update the menu check state
+            if hasattr(self, 'list_view_action') and hasattr(self, 'grid_view_action'):
+                self.list_view_action.setChecked(mode == 'list')
+                self.grid_view_action.setChecked(mode == 'grid')
+            
+            # Show/hide the appropriate view
             if mode == 'list':
                 # Show table, hide grid
                 if hasattr(self, 'grid_view'):
                     self.grid_view.setVisible(False)
                 self.table.setVisible(True)
+                
+                # Refresh table with current entries
+                self._update_table_view()
+                
             else:  # grid view
                 # Initialize grid view if it doesn't exist
                 if not hasattr(self, 'grid_view'):
                     from .components.password_grid_view import PasswordGridView
                     self.grid_view = PasswordGridView()
-                    self.grid_view.edit_requested.connect(self.edit_entry)
-                    self.grid_view.delete_requested.connect(self.delete_entry)
-                    self.content_layout.addWidget(self.grid_view)
+                    self.grid_view.item_double_clicked.connect(self.on_grid_item_double_clicked)
+                    self.stacked_widget.addWidget(self.grid_view)
                 
                 # Show grid, hide table
                 self.table.setVisible(False)
                 self.grid_view.setVisible(True)
+                
+                # Refresh grid view with current entries
                 self._update_grid_view()
+                
+            # Save view preference
+            self._save_view_preference(mode)
             
-            # Update the view toggle button state
-            if hasattr(self, 'view_toggle'):
-                self.view_toggle.set_view_mode(mode)
+        except Exception as e:
+            error_msg = f"Failed to switch to {mode} view: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            feedback.show_message(error_msg, "Error", "error")
+            raise  # Re-raise to allow with_loading_indicator to handle it
+    
+    def _save_view_preference(self, mode):
+        """Save the user's view preference.
+        
+        Args:
+            mode (str): The view mode to save ('list' or 'grid')
+        """
+        try:
+            if hasattr(self, 'config') and self.config:
+                self.config.set('ui', 'default_view', mode)
+                self.config.save()
+                logger.debug("View preference saved: %s", mode)
+        except Exception as e:
+            logger.warning("Failed to save view preference: %s", str(e))
     
     def _update_button_states(self):
         """Update the enabled state of action buttons based on selection."""
@@ -1350,8 +1456,16 @@ class MainWindow(QMainWindow):
         
     def check_for_updates(self):
         """Check for application updates and show the update dialog."""
-        from .updates import check_for_updates
-        check_for_updates(self)
+        try:
+            from .updates import check_for_updates
+            check_for_updates(self)
+        except ImportError as e:
+            logger.error("Failed to import updates module: %s", str(e))
+            feedback.show_message(
+                "Update check failed: Could not load update module.",
+                "Update Error",
+                "error"
+            )
         
     def show_sponsor_dialog(self):
         """Show the sponsor dialog."""
