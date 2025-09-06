@@ -1,4 +1,10 @@
-"""Main window implementation for the Password Manager application."""
+"""
+Main window implementation for the Password Manager application.
+
+This module provides the main application window with a modern UI,
+including a password list, search functionality, and various tools
+for managing password entries.
+"""
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QFileDialog, 
@@ -6,18 +12,26 @@ from PySide6.QtWidgets import (
     QProgressDialog, QStatusBar, QSplitter, QMenu, QSizePolicy,
     QToolBar, QInputDialog, QDialog, QDialogButtonBox, QFormLayout,
     QCheckBox, QComboBox, QTabWidget, QGroupBox, QScrollArea,
-    QStackedWidget, QFrame
+    QStackedWidget, QFrame, QToolTip, QApplication, QActionGroup
 )
 
 from .toolbar import MainToolBar
-from PySide6.QtCore import Qt, QSize, QThread, Signal, QObject, QPoint
-from PySide6.QtGui import QAction, QIcon, QClipboard, QGuiApplication
+from PySide6.QtCore import (
+    Qt, QSize, QThread, Signal, QObject, QPoint, 
+    QTimer, QEvent, QDateTime
+)
+from PySide6.QtGui import (
+    QAction, QIcon, QClipboard, QGuiApplication, 
+    QPixmap, QPainter, QColor, QFontMetrics, QFont
+)
 
 from .menu import MenuBar
 from .about import show_about_dialog
 from .components.view_toggle import ViewToggle
 from .components.password_grid_view import PasswordGridView
+from .components.share_dialog import ShareDialog
 from .dashboard import PasswordHealthWidget, PasswordHealthMetrics
+from .utils.feedback import feedback, tooltip, with_loading_indicator
 
 from pathlib import Path
 import logging
@@ -136,8 +150,14 @@ class ImportDialog(QProgressDialog):
             self.thread.wait()
         self.reject()
 
+
 class MainWindow(QMainWindow):
-    """Main window class for the Password Manager application."""
+    """
+    Main window class for the Password Manager application.
+    
+    This class provides the main interface for the password manager,
+    including the menu bar, toolbar, password list, and various dialogs.
+    """
     
     def __init__(self, db_manager, app=None):
         """Initialize the main window.
@@ -160,6 +180,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"Password Manager v{get_version()}")
         self.setMinimumSize(1200, 700)
         
+        # Set application style
+        self._setup_style()
+        
         # Set up the main widget and layout
         self.main_widget = QWidget()
         self.setCentralWidget(self.main_widget)
@@ -169,6 +192,7 @@ class MainWindow(QMainWindow):
         
         # Create a splitter for dashboard and content
         self.splitter = QSplitter(Qt.Vertical)
+        self.splitter.setHandleWidth(1)
         self.main_layout.addWidget(self.splitter)
         
         # Create dashboard widget (initially hidden)
@@ -196,8 +220,127 @@ class MainWindow(QMainWindow):
         self.entries = []
         self.grid_view = None  # Initialize grid_view attribute
         
-        # Load the data
+        # Set up tooltip timer
+        self.tooltip_timer = QTimer(self)
+        self.tooltip_timer.setSingleShot(True)
+        self.tooltip_timer.timeout.connect(self._show_tooltip)
+        self.current_tooltip = None
+        
+        # Set up status bar timer
+        self.status_timer = QTimer(self)
+        self.status_timer.setSingleShot(True)
+        self.status_timer.timeout.connect(self.clear_status_bar)
+        
+        # Load the data with loading indicator
         self.refresh_entries()
+    
+    def _setup_style(self):
+        """Set up the application style and theme."""
+        # Set application style
+        self.setStyleSheet("""
+            QMainWindow, QDialog, QWidget {
+                background-color: #f5f5f5;
+                color: #333333;
+                font-family: 'Segoe UI', Arial, sans-serif;
+            }
+            
+            QPushButton {
+                background-color: #e0e0e0;
+                border: 1px solid #bdbdbd;
+                border-radius: 4px;
+                padding: 5px 12px;
+                min-width: 80px;
+            }
+            
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+            
+            QPushButton:pressed {
+                background-color: #bdbdbd;
+            }
+            
+            QPushButton:disabled {
+                background-color: #eeeeee;
+                color: #9e9e9e;
+            }
+            
+            QLineEdit, QComboBox, QTextEdit, QPlainTextEdit {
+                border: 1px solid #bdbdbd;
+                border-radius: 4px;
+                padding: 5px 8px;
+                background: white;
+                selection-background-color: #90caf9;
+            }
+            
+            QLineEdit:focus, QComboBox:focus, QTextEdit:focus, QPlainTextEdit:focus {
+                border: 1px solid #64b5f6;
+            }
+            
+            QTabWidget::pane {
+                border: 1px solid #bdbdbd;
+                border-radius: 4px;
+                padding: 5px;
+                margin-top: 5px;
+            }
+            
+            QTabBar::tab {
+                background: #e0e0e0;
+                border: 1px solid #bdbdbd;
+                border-bottom: none;
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
+                padding: 5px 12px;
+                margin-right: 2px;
+            }
+            
+            QTabBar::tab:selected {
+                background: white;
+                border-bottom: 1px solid white;
+                margin-bottom: -1px;
+            }
+            
+            QTabBar::tab:!selected {
+                margin-top: 2px;
+            }
+            
+            QToolTip {
+                background-color: #fffbdd;
+                color: #5d4037;
+                border: 1px solid #ffd54f;
+                padding: 5px;
+                border-radius: 3px;
+                opacity: 230;
+            }
+            
+            QStatusBar {
+                background: #e0e0e0;
+                color: #424242;
+                border-top: 1px solid #bdbdbd;
+            }
+            
+            QStatusBar::item {
+                border: none;
+                border-right: 1px solid #bdbdbd;
+                padding: 0 8px;
+            }
+            
+            QStatusBar QLabel {
+                padding: 0 5px;
+            }
+        """)
+        
+        # Set application font
+        font = self.font()
+        font.setPointSize(10)
+        self.setFont(font)
+        
+        # Set window icon if available
+        try:
+            from ... import resources_rc  # Import resources if available
+            self.setWindowIcon(QIcon(":/icons/app_icon.png"))
+        except ImportError:
+            pass
     
     def set_actions_enabled(self, enabled):
         """Enable or disable menu actions.
@@ -209,14 +352,166 @@ class MainWindow(QMainWindow):
     
     def _setup_menubar(self):
         """Set up the menu bar."""
-        # Create and set the menu bar
-        self.menu_bar = MenuBar(self)
-        self.setMenuBar(self.menu_bar)
+        menubar = self.menuBar()
         
-        # Add importers to the import menu
+        # File menu
+        file_menu = menubar.addMenu("&File")
+        
+        new_db_action = QAction("&New Database", self)
+        new_db_action.triggered.connect(self.new_database)
+        file_menu.addAction(new_db_action)
+        
+        # Import submenu
+        import_menu = file_menu.addMenu("&Import From...")
+        
+        # Add importers to the menu
         for importer in get_importers():
-            self.menu_bar.add_importer(importer)
-    
+            action = QAction(importer.name, self)
+            action.triggered.connect(lambda _, i=importer: self._show_import_dialog(i))
+            import_menu.addAction(action)
+        
+        # Backup/Restore
+        file_menu.addSeparator()
+        
+        backup_action = QAction("Create &Backup...", self)
+        backup_action.triggered.connect(self.create_backup)
+        file_menu.addAction(backup_action)
+        
+        restore_action = QAction("&Restore from Backup...", self)
+        restore_action.triggered.connect(self.restore_backup)
+        file_menu.addAction(restore_action)
+        
+        # Export
+        export_action = QAction("&Export Entries...", self)
+        export_action.triggered.connect(self.export_entries)
+        file_menu.addAction(export_action)
+        
+        file_menu.addSeparator()
+        
+        exit_action = QAction("E&xit", self)
+        exit_action.setShortcut("Ctrl+Q")
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
+        
+        # Edit menu
+        edit_menu = menubar.addMenu("&Edit")
+        
+        add_action = QAction("&Add Entry", self)
+        add_action.setShortcut("Ctrl+N")
+        add_action.triggered.connect(self.add_entry)
+        edit_menu.addAction(add_action)
+        
+        edit_action = QAction("&Edit Entry", self)
+        edit_action.setShortcut("Ctrl+E")
+        edit_action.triggered.connect(self.edit_entry)
+        edit_menu.addAction(edit_action)
+        
+        delete_action = QAction("&Delete Entry", self)
+        delete_action.setShortcut("Del")
+        delete_action.triggered.connect(self.delete_entry)
+        edit_menu.addAction(delete_action)
+        
+        edit_menu.addSeparator()
+        
+        # Share submenu
+        share_menu = edit_menu.addMenu("&Sharing")
+        
+        share_action = QAction("Share Entry...", self)
+        share_action.triggered.connect(self.share_entry)
+        share_menu.addAction(share_action)
+        
+        manage_shares_action = QAction("Manage Shares...", self)
+        manage_shares_action.triggered.connect(self.manage_shares)
+        share_menu.addAction(manage_shares_action)
+        
+        view_requests_action = QAction("View Access Requests...", self)
+        view_requests_action.triggered.connect(self.view_access_requests)
+        share_menu.addAction(view_requests_action)
+        
+        edit_menu.addSeparator()
+        
+        select_all_action = QAction("Select &All", self)
+        select_all_action.setShortcut("Ctrl+A")
+        select_all_action.triggered.connect(self._select_all_entries)
+        edit_menu.addAction(select_all_action)
+        
+        deselect_all_action = QAction("&Deselect All", self)
+        deselect_all_action.setShortcut("Ctrl+Shift+A")
+        deselect_all_action.triggered.connect(self._deselect_all_entries)
+        edit_menu.addAction(deselect_all_action)
+        
+        # View menu
+        view_menu = menubar.addMenu("&View")
+        
+        toggle_dashboard_action = QAction("Toggle &Dashboard", self, checkable=True)
+        toggle_dashboard_action.setChecked(False)
+        toggle_dashboard_action.triggered.connect(self.toggle_dashboard)
+        view_menu.addAction(toggle_dashboard_action)
+        
+        view_menu.addSeparator()
+        
+        # View mode actions
+        view_mode_group = view_menu.addMenu("View &Mode")
+        
+        list_view_action = QAction("&List View", self, checkable=True)
+        list_view_action.setChecked(True)
+        list_view_action.triggered.connect(lambda: self.set_view_mode('list'))
+        view_mode_group.addAction(list_view_action)
+        
+        grid_view_action = QAction("&Grid View", self, checkable=True)
+        grid_view_action.setChecked(False)
+        grid_view_action.triggered.connect(lambda: self.set_view_mode('grid'))
+        view_mode_group.addAction(grid_view_action)
+        
+        # Add actions to a group for mutual exclusivity
+        view_mode_group = view_menu.addActionGroup("ViewModeGroup")
+        view_mode_group.addAction(list_view_action)
+        view_mode_group.addAction(grid_view_action)
+        view_mode_group.setExclusive(True)
+        
+        # Tools menu
+        tools_menu = menubar.addMenu("&Tools")
+        
+        # Password generator
+        password_generator_action = QAction("Password &Generator...", self)
+        password_generator_action.triggered.connect(self.show_password_generator)
+        tools_menu.addAction(password_generator_action)
+        
+        # Password analyzer
+        password_analyzer_action = QAction("Password &Analyzer...", self)
+        password_analyzer_action.triggered.connect(self.show_password_analyzer)
+        tools_menu.addAction(password_analyzer_action)
+        
+        tools_menu.addSeparator()
+        
+        # Settings
+        settings_action = QAction("&Settings...", self)
+        settings_action.triggered.connect(self.show_settings)
+        tools_menu.addAction(settings_action)
+        
+        # Help menu
+        help_menu = menubar.addMenu("&Help")
+        
+        docs_action = QAction("&Documentation...", self)
+        docs_action.triggered.connect(self.open_wiki)
+        help_menu.addAction(docs_action)
+        
+        help_menu.addSeparator()
+        
+        check_updates_action = QAction("Check for &Updates...", self)
+        check_updates_action.triggered.connect(self.check_for_updates)
+        help_menu.addAction(check_updates_action)
+        
+        help_menu.addSeparator()
+        
+        about_action = QAction("&About", self)
+        about_action.triggered.connect(lambda: show_about_dialog(self))
+        help_menu.addAction(about_action)
+        
+        sponsor_action = QAction("Support Us ❤️", self)
+        sponsor_action.triggered.connect(self.show_sponsor_dialog)
+        help_menu.addAction(sponsor_action)
+        
     def _setup_toolbar(self):
         """Set up the main toolbar with view controls and search."""
         # Create and set up the toolbar
@@ -246,43 +541,27 @@ class MainWindow(QMainWindow):
     
     def _setup_table(self):
         """Set up the table widget."""
-        # Create table
         self.table = QTableWidget()
-        self.table.setColumnCount(7)  # Added an extra column for the ID
-        self.table.setHorizontalHeaderLabels([
-            "Title", "Username", "Password", "URL", "Notes", "Last Modified", "ID"
-        ])
+        self.table.setColumnCount(5)  # Added an extra column for the share icon
+        self.table.setHorizontalHeaderLabels(["", "Title", "Username", "URL", "Last Modified"])
         
-        # Configure table properties
-        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.ExtendedSelection)  # Enable multi-selection
-        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        # Set column resize modes
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)  # Share icon
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)  # Title
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Username
+        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)  # URL
+        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)  # Last Modified
         
-        # Enable keyboard selection with Ctrl/Shift and arrow keys
-        self.table.setFocusPolicy(Qt.StrongFocus)
-        self.table.setDragEnabled(True)
-        self.table.setDragDropMode(QAbstractItemView.DragOnly)
-        self.table.setDefaultDropAction(Qt.IgnoreAction)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setSelectionMode(QTableWidget.ExtendedSelection)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self.show_context_menu)
+        self.table.doubleClicked.connect(self.on_table_double_click)
         
-        # Set column stretch and resize modes
-        header = self.table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.Stretch)  # Title
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)  # Username
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Password (hidden by default)
-        header.setSectionResizeMode(3, QHeaderView.Stretch)  # URL
-        header.setSectionResizeMode(4, QHeaderView.Stretch)  # Notes
-        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # Last Modified
-        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)  # ID (hidden)
-        
-        # Hide password and ID columns by default
-        self.table.setColumnHidden(2, True)
-        self.table.setColumnHidden(6, True)  # Hide ID column
-        
-        # Connect signals
-        self.table.doubleClicked.connect(self.edit_entry)
-        
-        # Load initial data
-        self.refresh_entries()
+        # Update button states when selection changes
+        self.table.itemSelectionChanged.connect(self._update_button_states)
     
     def _setup_statusbar(self):
         """Set up the status bar."""
@@ -450,217 +729,222 @@ class MainWindow(QMainWindow):
             row = current_row + i
             self.table.insertRow(row)
             
-            # Create items
-            title_item = QTableWidgetItem(entry.title or "")
-            username_item = QTableWidgetItem(entry.username or "")
+            # Add share icon if the entry is shared
+            share_icon = QTableWidgetItem()
+            if hasattr(entry, 'is_shared') and entry.is_shared:
+                share_icon.setIcon(self.style().standardIcon(QStyle.SP_MessageBoxInformation))
+                share_icon.setToolTip("This entry is shared")
             
-            # Password field (masked by default)
-            password_item = QTableWidgetItem("•" * 8)  # Show dots instead of actual password
-            password_item.setData(Qt.UserRole, entry)  # Store entire entry as user data
+            self.table.setItem(row, 0, share_icon)
             
-            url_item = QTableWidgetItem(entry.url or "")
-            notes_item = QTableWidgetItem(entry.notes or "")
-            updated_item = QTableWidgetItem(str(entry.updated_at or ""))
-            id_item = QTableWidgetItem(str(entry.id))  # Hidden ID column
+            # Add entry data to the table
+            self.table.setItem(row, 1, QTableWidgetItem(entry.title))
+            self.table.setItem(row, 2, QTableWidgetItem(entry.username))
+            self.table.setItem(row, 3, QTableWidgetItem(entry.url))
+            self.table.setItem(row, 4, QTableWidgetItem(entry.updated_at.strftime("%Y-%m-%d %H:%M")))
             
-            # Set items in table
-            self.table.setItem(row, 0, title_item)
-            self.table.setItem(row, 1, username_item)
-            self.table.setItem(row, 2, password_item)
-            self.table.setItem(row, 3, url_item)
-            self.table.setItem(row, 4, notes_item)
-            self.table.setItem(row, 5, updated_item)
-            self.table.setItem(row, 6, id_item)
+            # Store the entry ID in the first column's data role
+            if hasattr(entry, 'id'):
+                item = self.table.item(row, 1)  # Changed to column 1 (Title)
+                if item:
+                    item.setData(Qt.UserRole, entry.id)
     
-    def import_from_lastpass(self):
-        """Import passwords from LastPass."""
-        from ..core.importers.lastpass_importer import LastPassImporter
-        self._show_import_dialog(LastPassImporter())
+    def _update_table_view(self):
+        """Update the table view with current entries."""
+        self.table.setRowCount(0)
+        
+        # Sort entries by title (case-insensitive)
+        sorted_entries = sorted(self.current_entries, key=lambda x: x.title.lower())
+        
+        for entry in sorted_entries:
+            self._add_entries_to_table([entry], False)
     
-    def import_from_chrome(self):
-        """Import passwords from Chrome."""
-        from ..core.importers.chrome_importer import ChromeImporter
-        self._show_import_dialog(ChromeImporter())
+    def _update_grid_view(self):
+        """Update the grid view with current entries."""
+        if not hasattr(self, 'grid_view'):
+            self.grid_view = PasswordGridView()
+            self.grid_view.itemDoubleClicked.connect(self.on_grid_item_double_clicked)
+            
+            # Add to the stacked widget if it exists
+            if hasattr(self, 'stacked_widget'):
+                self.stacked_widget.addWidget(self.grid_view)
+        
+        self.grid_view.clear()
+        
+        # Sort entries by title (case-insensitive)
+        sorted_entries = sorted(self.current_entries, key=lambda x: x.title.lower())
+        
+        for entry in sorted_entries:
+            self.grid_view.add_item(entry)
     
-    def import_from_firefox(self):
-        """Import passwords from Firefox."""
-        from ..core.importers.firefox_importer import FirefoxImporter
-        self._show_import_dialog(FirefoxImporter())
-    
-    def import_from_google(self):
-        """Import passwords from Google."""
-        from ..core.importers.google_importer import GoogleImporter
-        self._show_import_dialog(GoogleImporter())
+    @with_loading_indicator("Loading entries...", "Failed to load entries")
+    def refresh_entries(self, search_text=None):
+        """Refresh the list of password entries with loading indicators and error handling.
         
-    def import_from_1password(self):
-        """Import passwords from 1Password export."""
-        from ..core.importers.onepassword_importer import OnePasswordImporter
-        self._show_import_dialog(OnePasswordImporter())
-        
-    def import_from_bitwarden(self):
-        """Import passwords from Bitwarden export."""
-        from ..core.importers.bitwarden_importer import BitwardenImporter
-        self._show_import_dialog(BitwardenImporter())
-        
-    def import_from_opera(self):
-        """Import passwords from Opera browser."""
-        from ..core.importers.opera_importer import OperaImporter
-        self._show_import_dialog(OperaImporter())
-        
-    def import_from_edge(self):
-        """Import passwords from Microsoft Edge browser."""
-        from ..core.importers.edge_importer import EdgeImporter
-        self._show_import_dialog(EdgeImporter())
-        
-    def import_from_safari(self):
-        """Import passwords from Safari browser (macOS only)."""
-        from ..core.importers.safari_importer import SafariImporter
-        self._show_import_dialog(SafariImporter())
-        
-    def create_backup(self):
-        """Create an encrypted backup of the database."""
-        from ..core.backup import BackupManager
-        from .password_dialog import PasswordDialog
-        
-        # Ask for backup password
-        password = PasswordDialog.get_password_dialog(
-            title="Create Encrypted Backup",
-            message="Enter a password to encrypt your backup:",
-            confirm=True,
-            parent=self
-        )
-        
-        if not password:
-            return  # User cancelled
-                
-        backup_manager = BackupManager(self.db.db_path)
+        Args:
+            search_text: Optional text to filter entries
+        """
         try:
-            backup_path = backup_manager.create_backup(password)
-            QMessageBox.information(
-                self,
-                "Backup Created",
-                f"Backup created successfully at:\n{backup_path}"
-            )
-        except Exception as e:
-            logger.error(f"Error creating backup: {str(e)}")
-            QMessageBox.critical(
-                self,
-                "Backup Failed",
-                f"Failed to create backup: {str(e)}"
-            )
-    
-    def restore_backup(self):
-        """Restore database from an encrypted backup."""
-        from ..core.backup import BackupManager
-        from .password_dialog import PasswordDialog
-        
-        # Get list of available backups
-        backup_manager = BackupManager(self.db.db_path)
-        backups = backup_manager.list_backups()
-        
-        if not backups:
-            QMessageBox.information(
-                self,
-                "No Backups Found",
-                "No backup files were found. Please create a backup first."
-            )
-            return
+            # Show loading state
+            feedback.show_loading("Loading entries...")
             
-        # Show backup selection dialog
-        backup_items = [f"{Path(b['path']).name} ({b['size']/1024:.1f} KB)" for b in backups]
-        selected, ok = QInputDialog.getItem(
-            self,
-            "Select Backup to Restore",
-            "Available Backups:",
-            backup_items,
-            0,  # Default to first item
-            False  # Not editable
-        )
-        
-        if not (ok and selected):
-            return  # User cancelled
+            # Clear existing entries
+            self.entries = []
+            self.table_widget.setRowCount(0)
             
-        # Get the selected backup path
-        backup_index = backup_items.index(selected)
-        backup_path = backups[backup_index]['path']
-        
-        # Ask for backup password
-        password = PasswordDialog.get_password_dialog(
-            title="Restore from Backup",
-            message="Enter the password for the backup:",
-            confirm=False,
-            parent=self
-        )
-        
-        if not password:
-            return  # User cancelled
-            
-        # Confirm restore
-        reply = QMessageBox.question(
-            self,
-            "Confirm Restore",
-            "WARNING: This will overwrite your current database.\n"
-            "Make sure you have a backup before continuing.\n\n"
-            "Do you want to continue?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-        
-        if reply != QMessageBox.Yes:
-            return  # User cancelled
-            
-        try:
-            if backup_manager.restore_backup(backup_path, password):
-                QMessageBox.information(
-                    self,
-                    "Restore Successful",
-                    "Database has been restored successfully.\n"
-                    "The application will now restart to apply changes."
-                )
-                # Restart the application
-                import sys
-                from PySide6.QtCore import QProcess
-                from PySide6.QtWidgets import QApplication
-                QApplication.quit()
-                QProcess.startDetached(sys.executable, sys.argv)
+            # Get entries from database
+            if search_text and search_text.strip():
+                self.entries = self.db.search_entries(search_text)
+                feedback.show_loading(f"Found {len(self.entries)} matching entries")
             else:
-                QMessageBox.warning(
-                    self,
-                    "Restore Failed",
-                    "Failed to restore backup. The password may be incorrect."
-                )
-        except Exception as e:
-            logger.error(f"Error restoring backup: {str(e)}")
-            QMessageBox.critical(
-                self,
-                "Restore Failed",
-                f"An error occurred while restoring the backup: {str(e)}"
+                self.entries = self.db.get_all_entries()
+                feedback.show_loading(f"Loaded {len(self.entries)} entries")
+            
+            # Update views
+            self._update_table_view()
+            self._update_grid_view()
+            
+            # Update status bar with appropriate message
+            status_msg = (
+                f"Found {len(self.entries)} matching entries" if search_text and search_text.strip()
+                else f"Loaded {len(self.entries)} entries"
             )
+            self.show_status_message(status_msg, 5000)  # Show for 5 seconds
+            
+            # Refresh dashboard if visible
+            if self.dashboard_visible:
+                self.refresh_dashboard()
+                
+            return self.entries
+            
+        except Exception as e:
+            error_msg = f"Failed to load entries: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            feedback.show_message(error_msg, "Error", "error")
+            raise  # Re-raise to allow with_loading_indicator to handle it
+            
+        finally:
+            # Ensure loading indicator is hidden
+            feedback.show_loading(show=False)
     
-    def add_entry(self):
-        """Add a new password entry."""
-        from .entry_dialog import EntryDialog
+    def show_status_message(self, message, timeout=3000):
+        """Show a temporary status message in the status bar.
         
-        dialog = EntryDialog(self)
-        if dialog.exec() == EntryDialog.Accepted:
-            try:
-                entry = dialog.get_entry()
-                if self.db.save_entry(entry):
-                    self.refresh_entries()
-                    self.statusBar().showMessage("Entry added successfully", 3000)
-                else:
-                    QMessageBox.warning(
-                        self,
-                        "Error",
-                        "Failed to save entry. Please check the logs for details."
-                    )
-            except Exception as e:
-                logger.error(f"Error adding entry: {e}")
-                QMessageBox.critical(
-                    self,
-                    "Error",
-                    f"An error occurred while adding the entry: {str(e)}"
-                )
+        Args:
+            message: The message to display
+            timeout: Time in milliseconds to show the message (0 = show until next message)
+        """
+        self.statusBar().showMessage(message, timeout)
+        
+        # If a timeout is specified, set up a timer to clear the message
+        if timeout > 0:
+            QTimer.singleShot(timeout, self.statusBar().clearMessage)
+            logger.error(f"Error refreshing entries: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to load entries: {e}")
+    
+    def on_table_double_click(self, index):
+        """Handle double-click on table items."""
+        if index.column() == 0:  # Share icon column
+            row = index.row()
+            entry_id = self.table.item(row, 1).data(Qt.UserRole)  # Get ID from title column
+            self.share_entry(entry_id=entry_id)
+        else:
+            self.edit_entry()
+    
+    def on_grid_item_double_clicked(self, item):
+        """Handle double-click on grid view items."""
+        entry_id = item.data(Qt.UserRole)
+        if entry_id:
+            self.edit_entry(entry_id=entry_id)
+    
+    def share_entry(self, entry_id=None):
+        """Open the share dialog for the selected entry."""
+        if entry_id is None:
+            selected = self.table.selectionModel().selectedRows()
+            if not selected:
+                QMessageBox.warning(self, "No Selection", "Please select an entry to share.")
+                return
+            
+            # Get the entry ID from the first selected row
+            row = selected[0].row()
+            entry_id = self.table.item(row, 1).data(Qt.UserRole)  # Get ID from title column
+        
+        # Find the entry
+        entry = next((e for e in self.current_entries if str(e.id) == str(entry_id)), None)
+        if not entry:
+            QMessageBox.warning(self, "Error", "Selected entry not found.")
+            return
+        
+        # Show the share dialog
+        dialog = ShareDialog(entry, self)
+        dialog.share_created.connect(self.on_share_created)
+        dialog.share_revoked.connect(self.on_share_revoked)
+        dialog.exec_()
+    
+    def manage_shares(self):
+        """Open the manage shares dialog."""
+        selected = self.table.selectionModel().selectedRows()
+        if not selected:
+            QMessageBox.warning(self, "No Selection", "Please select an entry to manage shares.")
+            return
+        
+        # Get the entry ID from the first selected row
+        row = selected[0].row()
+        entry_id = self.table.item(row, 1).data(Qt.UserRole)  # Get ID from title column
+        
+        # Find the entry
+        entry = next((e for e in self.current_entries if str(e.id) == str(entry_id)), None)
+        if not entry:
+            QMessageBox.warning(self, "Error", "Selected entry not found.")
+            return
+        
+        # Show the share dialog on the manage shares tab
+        dialog = ShareDialog(entry, self)
+        dialog.tabs.setCurrentIndex(1)  # Switch to manage shares tab
+        dialog.share_created.connect(self.on_share_created)
+        dialog.share_revoked.connect(self.on_share_revoked)
+        dialog.exec_()
+    
+    def view_access_requests(self):
+        """Open the access requests dialog."""
+        selected = self.table.selectionModel().selectedRows()
+        entry_id = None
+        
+        if selected:
+            # If an entry is selected, show requests for that entry
+            row = selected[0].row()
+            entry_id = self.table.item(row, 1).data(Qt.UserRole)  # Get ID from title column
+        
+        # Find the entry if an ID was provided
+        entry = None
+        if entry_id:
+            entry = next((e for e in self.current_entries if str(e.id) == str(entry_id)), None)
+        
+        # Show the share dialog on the requests tab
+        dialog = ShareDialog(entry if entry else self.current_entries[0] if self.current_entries else None, self)
+        dialog.tabs.setCurrentIndex(2)  # Switch to requests tab
+        dialog.share_created.connect(self.on_share_created)
+        dialog.share_revoked.connect(self.on_share_revoked)
+        dialog.exec_()
+    
+    def on_share_created(self, share_data):
+        """Handle share creation."""
+        # Refresh the view to show the shared status
+        self.refresh_entries()
+        
+        # Show a notification
+        QMessageBox.information(
+            self,
+            "Share Created",
+            f"Password shared successfully!\n\n"
+            f"Recipient: {share_data.get('to_email')}\n"
+            f"Expires: {share_data.get('expires_at')}"
+        )
+    
+    def on_share_revoked(self, share_id):
+        """Handle share revocation."""
+        # Refresh the view to update the shared status
+        self.refresh_entries()
     
     def edit_entry(self, index=None, entry_id=None):
         """Edit the selected password entry.
@@ -685,7 +969,7 @@ class MainWindow(QMainWindow):
                 
                 # Get the first selected row
                 row = selected_rows[0].row()
-                entry_id = self.table.item(row, 6).text()
+                entry_id = self.table.item(row, 1).data(Qt.UserRole)  # Get ID from title column
         
         if not entry_id:
             QMessageBox.warning(self, "Error", "Could not determine which entry to edit.")
@@ -712,7 +996,7 @@ class MainWindow(QMainWindow):
                     # Select the updated row in the current view
                     if self.current_view == 'list':
                         for i in range(self.table.rowCount()):
-                            if self.table.item(i, 6).text() == str(entry_id):
+                            if self.table.item(i, 1).data(Qt.UserRole) == str(entry_id):
                                 self.table.selectRow(i)
                                 self.table.scrollToItem(self.table.item(i, 0))
                                 break
@@ -731,40 +1015,85 @@ class MainWindow(QMainWindow):
                 f"An error occurred while editing the entry: {str(e)}"
             )
     
-    def delete_entry(self, index=None, entry_id=None):
-        """Delete the selected password entries.
+    def delete_entry(self, index=None, entry_id=None, skip_confirm=False):
+        """Delete the selected password entries with enhanced feedback.
         
         Args:
             index: Optional QModelIndex of the item to delete (for grid view)
             entry_id: Optional ID of the entry to delete (for list view)
+            skip_confirm: If True, skip confirmation dialog (use with caution)
         """
-        # If entry_id is not provided, get selected entries from the current view
-        if entry_id is None:
-            if index is not None and hasattr(index, 'data') and callable(index.data):
-                # Handle grid view selection
-                entry = index.data(Qt.UserRole)
-                if entry and hasattr(entry, 'id'):
-                    entry_ids = [str(entry.id)]
-                else:
-                    QMessageBox.warning(self, "Delete Entry", "No entry selected.")
-                    return
-            else:
-                # Handle list view selection
-                selected_rows = self.table.selectionModel().selectedRows()
-                if not selected_rows:
-                    QMessageBox.warning(self, "Delete Entry", "Please select at least one entry to delete.")
-                    return
+        try:
+            # Get the entry ID to delete
+            if entry_id is None and index is not None:
+                # Get entry from grid view
+                entry = self.entries[index.row()]
+                entry_id = entry.id
+            
+            # Get entry details for confirmation message
+            entry = None
+            if entry_id:
+                entry = self.db.get_entry(entry_id)
+            
+            # If not skipping confirmation, show detailed confirmation dialog
+            if not skip_confirm:
+                confirm_dialog = QMessageBox(self)
+                confirm_dialog.setIcon(QMessageBox.Warning)
+                confirm_dialog.setWindowTitle("Confirm Deletion")
                 
-                # Get the IDs of the selected entries
-                entry_ids = []
-                for row in selected_rows:
-                    entry_id = self.table.item(row.row(), 6).text()
-                    if entry_id:
-                        entry_ids.append(entry_id)
-        else:
-            entry_ids = [str(entry_id)]
-        
-        if not entry_ids:
+                if entry:
+                    confirm_dialog.setText(
+                        f"<b>Are you sure you want to delete this entry?</b>"
+                        f"<br><br>"
+                        f"<b>Title:</b> {entry.title or 'Untitled'}<br>"
+                        f"<b>Username:</b> {entry.username or 'N/A'}<br>"
+                        f"<b>URL:</b> {entry.url or 'N/A'}"
+                    )
+                else:
+                    confirm_dialog.setText(
+                        "<b>Are you sure you want to delete the selected entries?</b>"
+                        "<br><br>"
+                        "This action cannot be undone."
+                    )
+                
+                confirm_dialog.setInformativeText(
+                    "This action cannot be undone. The entry will be permanently deleted."
+                )
+                confirm_dialog.setStandardButtons(
+                    QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
+                )
+                confirm_dialog.setDefaultButton(QMessageBox.No)
+                confirm_dialog.setEscapeButton(QMessageBox.Cancel)
+                
+                # Add a checkbox to confirm deletion
+                confirm_checkbox = QCheckBox("I understand this action cannot be undone")
+                confirm_checkbox.setChecked(False)
+                
+                # Create a container widget for the checkbox
+                container = QWidget()
+                layout = QVBoxLayout(container)
+                layout.addWidget(confirm_checkbox)
+                layout.setContentsMargins(0, 10, 0, 0)
+                
+                # Add the container to the dialog
+                confirm_dialog.layout().addWidget(container, 1, 1, 1, confirm_dialog.layout().columnCount())
+                
+                # Disable the Yes button until the checkbox is checked
+                yes_button = confirm_dialog.button(QMessageBox.Yes)
+                yes_button.setEnabled(False)
+                confirm_checkbox.stateChanged.connect(
+                    lambda state: yes_button.setEnabled(state == Qt.Checked)
+                )
+                
+                # Show the dialog and get the result
+                result = confirm_dialog.exec_()
+                
+                if result != QMessageBox.Yes:
+                    return  # User cancelled
+            
+            # Show loading indicator
+            feedback.show_loading("Deleting entry...")
+            
             QMessageBox.warning(self, "Delete Entry", "No entries selected for deletion.")
             return
         
@@ -808,70 +1137,6 @@ class MainWindow(QMainWindow):
                     "Error",
                     f"Failed to delete entries: {str(e)}"
                 )
-    
-    def refresh_entries(self, search_text=None):
-        """Refresh the list of password entries.
-        
-        Args:
-            search_text: Optional text to filter entries
-        """
-        try:
-            # Get entries from database
-            if search_text:
-                self.entries = self.db.search_entries(search_text)
-            else:
-                self.entries = self.db.get_all_entries()
-            
-            # Update table view
-            self._update_table_view()
-            
-            # Update dashboard
-            self.refresh_dashboard()
-            
-            # Update status bar
-            entry_count = len(self.entries)
-            self.entry_count_label.setText(f"{entry_count} {'entry' if entry_count == 1 else 'entries'}")
-            
-            # Enable/disable edit/delete buttons based on selection
-            self._update_button_states()
-            
-        except Exception as e:
-            logger.error(f"Error refreshing entries: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to load entries: {e}")
-    
-    def _add_entry_to_table(self, entry):
-        """Add a single entry to the table.
-        
-        Args:
-            entry: The PasswordEntry to add
-        """
-        row = self.table.rowCount()
-        self.table.insertRow(row)
-        
-        # Set items for each column
-        self.table.setItem(row, 0, QTableWidgetItem(entry.title or ""))
-        self.table.setItem(row, 1, QTableWidgetItem(entry.username or ""))
-        
-        # Password field (masked by default)
-        password_item = QTableWidgetItem("•" * 8)  # Show dots instead of actual password
-        password_item.setData(Qt.UserRole, entry)  # Store the entry for later use
-        self.table.setItem(row, 2, password_item)
-        
-        self.table.setItem(row, 3, QTableWidgetItem(entry.url or ""))
-        self.table.setItem(row, 4, QTableWidgetItem(entry.notes or ""))
-        self.table.setItem(row, 5, QTableWidgetItem(str(entry.updated_at or "")))
-        self.table.setItem(row, 6, QTableWidgetItem(str(entry.id)))  # Hidden ID column
-    
-    def _update_table_view(self):
-        """Update the table view with current entries."""
-        self.table.setRowCount(0)
-        for entry in self.entries:
-            self._add_entry_to_table(entry)
-    
-    def _update_grid_view(self):
-        """Update the grid view with current entries."""
-        if hasattr(self, 'grid_view') and self.grid_view:
-            self.grid_view.set_entries(self.entries)
     
     def refresh_dashboard(self):
         """Update the password health dashboard."""
