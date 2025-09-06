@@ -121,6 +121,10 @@ class DatabaseManager:
                 from src.core.security.crypto import DEFAULT_HASHER
                 new_hash, _ = DEFAULT_HASHER.hash_password(password, salt_bytes)
                 
+                # Log the hash details for debugging
+                logger.debug(f"Stored hash (first 16 bytes): {stored_hash[:16].hex() if hasattr(stored_hash, '__getitem__') else stored_hash}")
+                logger.debug(f"New hash (first 16 bytes): {new_hash[:16].hex() if hasattr(new_hash, '__getitem__') else new_hash}")
+                
                 # Ensure both hashes are bytes for comparison
                 if isinstance(stored_hash, str):
                     stored_hash = stored_hash.encode('utf-8')
@@ -130,6 +134,9 @@ class DatabaseManager:
                 # Compare the hashes
                 if not hmac.compare_digest(stored_hash, new_hash):
                     logger.warning("Password verification failed")
+                    logger.debug(f"Hash comparison failed. Stored hash length: {len(stored_hash)}, New hash length: {len(new_hash)}")
+                    logger.debug(f"Stored hash: {stored_hash.hex()}")
+                    logger.debug(f"New hash: {new_hash.hex()}")
                     return False
                 
                 # If we get here, the password is correct - derive the master key

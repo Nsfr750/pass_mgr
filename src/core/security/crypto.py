@@ -278,12 +278,16 @@ class SecureHasher:
         Returns:
             Tuple of (hash, salt) as bytes
         """
-        # Use the same salt if provided, otherwise generate a new one
-        if not salt:
-            salt = self._generate_salt()
+        logger.debug(f"PBKDF2-HMAC-SHA256 hashing with salt: {salt.hex() if hasattr(salt, 'hex') else salt}")
         
-        # Derive the key using PBKDF2
-        dk = hashlib.pbkdf2_hmac(
+        # Ensure password and salt are bytes
+        if isinstance(password, str):
+            password = password.encode('utf-8')
+        if isinstance(salt, str):
+            salt = salt.encode('utf-8')
+            
+        # Generate the hash using PBKDF2-HMAC-SHA256
+        hash_bytes = hashlib.pbkdf2_hmac(
             'sha256',
             password,
             salt,
@@ -291,7 +295,8 @@ class SecureHasher:
             dklen=self.hash_len
         )
         
-        return dk, salt
+        logger.debug(f"Generated hash (first 16 bytes): {hash_bytes[:16].hex() if hasattr(hash_bytes, '__getitem__') else hash_bytes}")
+        return hash_bytes, salt
 
 # Default instance for convenience
 DEFAULT_HASHER = SecureHasher()
