@@ -145,6 +145,47 @@ class MenuBar(QMenuBar):
         # Add separator
         tools_menu.addSeparator()
         
+        # Security submenu
+        security_menu = tools_menu.addMenu("&Security")
+        
+        # Emergency Access
+        emergency_action = QAction("&Emergency Access...", self)
+        emergency_action.triggered.connect(self.parent.show_emergency_access)
+        security_menu.addAction(emergency_action)
+        
+        # Breach Monitor
+        breach_monitor_action = QAction("&Breach Monitor...", self)
+        breach_monitor_action.triggered.connect(self.parent.show_breach_monitor)
+        security_menu.addAction(breach_monitor_action)
+        
+        # Password Analyzer
+        analyzer_action = QAction("Password &Analyzer...", self)
+        analyzer_action.triggered.connect(self.parent.show_password_analyzer)
+        security_menu.addAction(analyzer_action)
+        
+        # Password Audit
+        audit_action = QAction("Password &Audit...", self)
+        audit_action.triggered.connect(self.parent.run_password_audit)
+        security_menu.addAction(audit_action)
+        
+        # Password Sharing
+        sharing_action = QAction("Password &Sharing...", self)
+        sharing_action.triggered.connect(self.parent.show_password_sharing)
+        security_menu.addAction(sharing_action)
+        
+        # Duplicate Checker
+        duplicate_action = QAction("Check for &Duplicates...", self)
+        duplicate_action.triggered.connect(self.parent.check_duplicate_passwords)
+        security_menu.addAction(duplicate_action)
+        
+        # Clear Clipboard
+        clear_clipboard_action = QAction("&Clear Clipboard", self)
+        clear_clipboard_action.triggered.connect(self.parent.clear_clipboard)
+        security_menu.addAction(clear_clipboard_action)
+        
+        # Add separator
+        security_menu.addSeparator()
+        
         # Log Viewer action
         log_viewer_action = QAction("View &Logs...", self)
         log_viewer_action.triggered.connect(self.parent.show_log_viewer)

@@ -5,17 +5,32 @@ from typing import Optional
 
 @dataclass
 class PasswordEntry:
-    """Represents a password entry in the password manager."""
+    """Represents a password entry in the password manager.
+    
+    Attributes:
+        id: Unique identifier for the entry
+        title: Title/name of the entry
+        username: Username/email for the entry
+        password: The password (empty string if not set)
+        url: Associated URL (optional)
+        notes: Any additional notes (optional)
+        created_at: When the entry was created
+        updated_at: When the entry was last updated
+        folder: Folder/category for organization (optional)
+        tags: List of tags for categorization
+        is_empty_password: Flag indicating if this is an intentionally empty password
+    """
     id: str
     title: str
     username: str
-    password: str
-    url: str
+    password: str = ""
+    url: str = ""
     notes: str = ""
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
     folder: Optional[str] = None
     tags: list[str] = field(default_factory=list)
+    is_empty_password: bool = False
     
     def to_dict(self) -> dict:
         """Convert the entry to a dictionary."""
@@ -29,7 +44,8 @@ class PasswordEntry:
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
             "folder": self.folder,
-            "tags": self.tags
+            "tags": self.tags,
+            "is_empty_password": self.is_empty_password
         }
     
     @classmethod
@@ -45,7 +61,8 @@ class PasswordEntry:
             created_at=datetime.fromisoformat(data.get('created_at', datetime.utcnow().isoformat())),
             updated_at=datetime.fromisoformat(data.get('updated_at', datetime.utcnow().isoformat())),
             folder=data.get('folder'),
-            tags=data.get('tags', [])
+            tags=data.get('tags', []),
+            is_empty_password=bool(data.get('is_empty_password', False))
         )
 
 @dataclass

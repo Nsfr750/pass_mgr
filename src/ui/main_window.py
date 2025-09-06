@@ -1080,20 +1080,9 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(
                 self,
-                "Export Failed",
-                f"An error occurred while exporting: {str(e)}"
-            )
-            logger.exception("Error exporting entries")
     
-    def show_about(self):
-        """Show the about dialog."""
-        from .about import show_about_dialog
-        show_about_dialog(self)
-    
-    def show_log_viewer(self):
-        """Show the log viewer dialog."""
-        from .log_view import show_log_viewer
-        show_log_viewer(self)
+    if not file_path:
+        return  # User cancelled
     
     def show_settings(self):
         """Show the settings dialog."""

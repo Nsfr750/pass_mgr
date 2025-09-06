@@ -122,12 +122,25 @@ class DatabaseManager:
                 new_hash, _ = DEFAULT_HASHER.hash_password(password, salt_bytes)
                 
                 # Log the hash details for debugging
-                logger.debug(f"Stored hash (first 16 bytes): {stored_hash[:16].hex() if hasattr(stored_hash, '__getitem__') else stored_hash}")
-                logger.debug(f"New hash (first 16 bytes): {new_hash[:16].hex() if hasattr(new_hash, '__getitem__') else new_hash}")
+                def safe_hex(data):
+                    if hasattr(data, 'hex'):
+                        return data.hex()
+                    elif isinstance(data, str):
+                        return data.encode('utf-8').hex()
+                    return str(data)
+                
+                logger.debug(f"Stored hash (first 16 bytes): {safe_hex(stored_hash[:16]) if hasattr(stored_hash, '__getitem__') else safe_hex(stored_hash)}")
+                logger.debug(f"New hash (first 16 bytes): {safe_hex(new_hash[:16]) if hasattr(new_hash, '__getitem__') else safe_hex(new_hash)}")
                 
                 # Ensure both hashes are bytes for comparison
                 if isinstance(stored_hash, str):
-                    stored_hash = stored_hash.encode('utf-8')
+                    try:
+                        # Try to decode from base64 first
+                        stored_hash = base64.b64decode(stored_hash)
+                    except Exception:
+                        # If not base64, encode as utf-8
+                        stored_hash = stored_hash.encode('utf-8')
+                
                 if isinstance(new_hash, str):
                     new_hash = new_hash.encode('utf-8')
                 
@@ -270,7 +283,9 @@ class DatabaseManager:
     
     def _generate_key(self, password: str, salt: bytes = None) -> Tuple[bytes, bytes]:
         """Generate a key from a password using PBKDF2."""
-        key, salt = derive_key(password, salt)
+        if salt is None:
+            salt = generate_salt()
+        key = derive_key(password, salt)
         return key, salt
     
     def _encrypt_data(self, data: str) -> Tuple[bytes, bytes]:
@@ -301,9 +316,13 @@ class DatabaseManager:
                 cursor.execute('SELECT password_encrypted, iv FROM passwords LIMIT 1')
                 result = cursor.fetchone()
                 if result and result[0] and result[1]:
-                    # Try to decrypt the data
+                    # Try to decrypt the data using AES-GCM
                     try:
-                        decrypt_data(result[0], self.master_key, result[1])
+                        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+                        aesgcm = AESGCM(self.master_key)
+                        # For AES-GCM, the nonce is 12 bytes
+                        nonce = result[1][:12]  # Ensure nonce is 12 bytes for AES-GCM
+                        aesgcm.decrypt(nonce, result[0], None)  # No associated data
                         return True
                     except Exception as e:
                         logger.error(f"Master key verification failed: {e}")
@@ -314,8 +333,9 @@ class DatabaseManager:
             return False
     
     def _decrypt_data(self, encrypted_data: bytes, nonce: bytes) -> str:
-        """Decrypt data using the master key."""
+        """Decrypt data using the master key with AES-GCM."""
         if not encrypted_data or not nonce:
+            logger.debug("No data or nonce provided for decryption")
             return ""
             
         if not self.master_key:
@@ -323,11 +343,34 @@ class DatabaseManager:
             return ""
             
         try:
-            from .security import decrypt_data
-            plaintext = decrypt_data(encrypted_data, self.master_key, nonce)
-            return plaintext if plaintext else ""
+            from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+            
+            # Log input data for debugging
+            logger.debug(f"Decrypting data - Encrypted length: {len(encrypted_data)}, Nonce length: {len(nonce)}")
+            logger.debug(f"Encrypted data (first 16 bytes): {encrypted_data[:16].hex()}")
+            logger.debug(f"Nonce (first 16 bytes): {nonce[:16].hex()}")
+            
+            # Ensure nonce is the correct length for AES-GCM (12 bytes)
+            nonce = nonce[:12]  # Truncate to 12 bytes if longer
+            logger.debug(f"Using nonce (12 bytes): {nonce.hex()}")
+            
+            # Initialize AES-GCM with the master key
+            aesgcm = AESGCM(self.master_key)
+            
+            # Decrypt the data
+            try:
+                decrypted_data = aesgcm.decrypt(nonce, encrypted_data, None)
+                logger.debug(f"Successfully decrypted data, length: {len(decrypted_data)}")
+                return decrypted_data.decode('utf-8')
+            except Exception as e:
+                logger.error(f"AES-GCM decryption failed: {e}")
+                logger.debug(f"Encrypted data (hex): {encrypted_data.hex()}")
+                logger.debug(f"Nonce (hex): {nonce.hex()}")
+                logger.debug(f"Master key (first 16 bytes): {self.master_key[:16].hex()}")
+                return ""
+                
         except Exception as e:
-            logger.error(f"Decryption failed: {e}", exc_info=True)
+            logger.error(f"Error in _decrypt_data: {e}", exc_info=True)
             return ""
     
     def set_master_password(self, password: str, old_password: str = None) -> bool:
@@ -397,32 +440,55 @@ class DatabaseManager:
     
     def _save_entry(self, conn: sqlite3.Connection, entry: PasswordEntry) -> None:
         """Save an entry to the database."""
-        # Encrypt sensitive data
-        password_encrypted, iv = self._encrypt_data(entry.password)
-        notes_encrypted, notes_iv = self._encrypt_data(entry.notes)
-        tags_encrypted, tags_iv = self._encrypt_data(json.dumps(entry.tags) if entry.tags else None)
-        
-        # Use the same IV for all fields for simplicity (in a real app, you might want separate IVs)
         cursor = conn.cursor()
         
-        cursor.execute('''
-            INSERT OR REPLACE INTO passwords 
-            (id, title, username, password_encrypted, url, notes_encrypted, 
-             folder, tags_encrypted, created_at, updated_at, iv)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
+        # Handle empty passwords by setting to NULL
+        password_encrypted = None
+        iv = None
+        if entry.password:  # Only encrypt non-empty passwords
+            if self.master_key:
+                password_encrypted, iv = self._encrypt_data(entry.password)
+        # If entry.password is empty string, both password_encrypted and iv will be None
+        
+        # Prepare data for insertion/update
+        data = (
             entry.id,
             entry.title,
             entry.username,
-            password_encrypted,
+            password_encrypted,  # Will be None for empty passwords
             entry.url,
-            notes_encrypted,
+            entry.notes,
             entry.folder,
-            tags_encrypted,
-            entry.created_at,
-            datetime.utcnow(),  # Always update the updated_at timestamp
-            iv  # Using the same IV for all fields for simplicity
-        ))
+            json.dumps(entry.tags) if entry.tags else None,
+            entry.created_at.isoformat() if entry.created_at else None,
+            datetime.now().isoformat(),
+            iv  # Will be None for empty passwords
+        )
+        
+        # Check if entry exists
+        cursor.execute('SELECT id FROM passwords WHERE id = ?', (entry.id,))
+        exists = cursor.fetchone() is not None
+        
+        if exists:
+            # Update existing entry
+            query = """
+                UPDATE passwords 
+                SET title=?, username=?, password_encrypted=?, url=?, notes=?, 
+                    folder=?, tags=?, created_at=?, updated_at=?, iv=?
+                WHERE id=?
+            """
+            cursor.execute(query, data[1:] + (entry.id,))
+        else:
+            # Insert new entry
+            query = """
+                INSERT INTO passwords 
+                (id, title, username, password_encrypted, url, notes, 
+                 folder, tags, created_at, updated_at, iv)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """
+            cursor.execute(query, data)
+        
+        return cursor.rowcount > 0
     
     def save_entry(self, entry: PasswordEntry) -> bool:
         """Save a password entry to the database."""
@@ -459,7 +525,7 @@ class DatabaseManager:
             logger.error(f"Error getting entry: {e}")
             return None
     
-    def _row_to_entry(self, row):
+    def _row_to_entry(self, row) -> Optional[PasswordEntry]:
         """Convert a database row to a PasswordEntry object.
         
         Args:
@@ -472,13 +538,13 @@ class DatabaseManager:
             return None
             
         try:
-            # Convert sqlite3.Row to dict if needed
-            if hasattr(row, 'keys'):  # It's a Row object
+            # Convert row to dict if it isn't already
+            if isinstance(row, dict):
+                row_dict = row
+            else:
                 row_dict = {key: row[key] for key in row.keys()}
-            else:  # It's already a dict or similar
-                row_dict = dict(row)
                 
-            # Get required fields
+            # Get basic fields
             entry_id = row_dict.get('id')
             title = row_dict.get('title', '')
             username = row_dict.get('username', '')
@@ -490,39 +556,42 @@ class DatabaseManager:
             tags = []
             if 'tags' in row_dict and row_dict['tags']:
                 try:
-                    if isinstance(row_dict['tags'], str):
-                        tags = [t.strip() for t in row_dict['tags'].split(',') if t.strip()]
-                    elif isinstance(row_dict['tags'], (list, tuple)):
-                        tags = list(row_dict['tags'])
-                except Exception as e:
+                    tags = json.loads(row_dict['tags'])
+                except (json.JSONDecodeError, TypeError) as e:
                     logger.warning(f"Error parsing tags for entry {entry_id}: {e}")
             
             # Handle dates safely
             def safe_parse_date(date_str, default=None):
                 if not date_str:
                     return default or datetime.now()
-                try:
-                    if isinstance(date_str, str):
-                        return datetime.fromisoformat(date_str)
-                    elif isinstance(date_str, (int, float)):
-                        return datetime.fromtimestamp(date_str)
-                    return default or datetime.now()
-                except (ValueError, TypeError) as e:
-                    logger.warning(f"Error parsing date '{date_str}' for entry {entry_id}: {e}")
-                    return default or datetime.now()
             
             created_at = safe_parse_date(row_dict.get('created_at'))
             updated_at = safe_parse_date(row_dict.get('updated_at'))
             
-            # Try to get password from either encrypted or plain field
-            password = row_dict.get('password', '')
-            if 'password_encrypted' in row_dict and 'iv' in row_dict:
+            # Handle password decryption
+            password = ''
+            password_encrypted = row_dict.get('password_encrypted')
+            iv = row_dict.get('iv')
+            is_empty_password = False
+            
+            # Check if this is an intentionally empty password
+            if password_encrypted is None and iv is None:
+                is_empty_password = True
+            # Only try to decrypt if we have both encrypted data and IV
+            elif password_encrypted is not None and iv is not None:
                 try:
-                    decrypted = self._decrypt_data(row_dict['password_encrypted'], row_dict['iv'])
-                    if decrypted:
+                    decrypted = self._decrypt_data(password_encrypted, iv)
+                    if decrypted is not None:  # Only update if decryption succeeded
                         password = decrypted
+                        # Check if this was an empty password that was encrypted
+                        if not password:
+                            is_empty_password = True
+                    # If decrypted is None, keep the empty string
                 except Exception as e:
                     logger.warning(f"Failed to decrypt password for entry {entry_id}: {e}")
+            else:
+                # If only one of password_encrypted or iv is None, log a warning
+                logger.warning(f"Inconsistent encryption state for entry {entry_id} - password_encrypted: {'exists' if password_encrypted is not None else 'missing'}, iv: {'exists' if iv is not None else 'missing'}")
             
             # Create and return the PasswordEntry
             return PasswordEntry(
@@ -535,7 +604,8 @@ class DatabaseManager:
                 folder=str(folder),
                 tags=[str(tag) for tag in tags],
                 created_at=created_at,
-                updated_at=updated_at
+                updated_at=updated_at,
+                is_empty_password=is_empty_password
             )
             
         except Exception as e:

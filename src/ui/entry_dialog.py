@@ -1,8 +1,9 @@
 """Dialog for adding or editing password entries."""
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QLineEdit,
-    QTextEdit, QDialogButtonBox, QPushButton, QCheckBox, QMessageBox
+    QTextEdit, QDialogButtonBox, QPushButton, QCheckBox, QMessageBox, QProgressBar
 )
+from PySide6.QtGui import QColor, QPalette
 from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtGui import QIcon, QPixmap, QFont, QFontMetrics
 
@@ -211,24 +212,71 @@ class EntryDialog(QDialog):
         self.username_edit.setPlaceholderText("username or email")
         form_layout.addRow("Username/Email:", self.username_edit)
         
-        # Password
-        password_layout = QHBoxLayout()
+        # Password field with show/hide toggle and empty password indicator
+        password_layout = QVBoxLayout()
         
+        # Main password row
+        password_row = QHBoxLayout()
+        
+        # Password edit with empty password indicator
+        password_edit_container = QVBoxLayout()
+        
+        # Password input row
+        password_input_row = QHBoxLayout()
         self.password_edit = QLineEdit(self.entry.password)
         self.password_edit.setEchoMode(QLineEdit.Password)
-        self.password_edit.setPlaceholderText("Leave empty to keep current password")
         
-        self.show_password_check = QCheckBox("Show")
-        self.show_password_check.toggled.connect(self.toggle_password_visibility)
+        # Add empty password indicator if password is empty
+        self.empty_password_indicator = QLabel("[Empty Password]")
+        self.empty_password_indicator.setStyleSheet("color: #888; font-style: italic;")
+        self.empty_password_indicator.setVisible(self.entry.is_empty_password)
         
+        password_input_row.addWidget(self.password_edit)
+        password_input_row.addWidget(self.empty_password_indicator)
+        
+        # Password strength indicator
+        self.password_strength = QProgressBar()
+        self.password_strength.setRange(0, 100)
+        self.password_strength.setTextVisible(False)
+        self.password_strength.setFixedHeight(4)
+        
+        # Password strength label
+        self.password_strength_label = QLabel("")
+        self.password_strength_label.setStyleSheet("font-size: 0.8em;")
+        
+        password_edit_container.addLayout(password_input_row)
+        password_edit_container.addWidget(self.password_strength)
+        password_edit_container.addWidget(self.password_strength_label)
+        
+        # Show/hide password button
+        self.show_password_btn = QPushButton()
+        self.show_password_btn.setIcon(QIcon(":/icons/eye.png"))
+        self.show_password_btn.setCheckable(True)
+        self.show_password_btn.toggled.connect(self.toggle_password_visibility)
+        
+        # Generate password button
         generate_btn = QPushButton("Generate")
         generate_btn.clicked.connect(self.show_password_generator)
         
-        password_layout.addWidget(self.password_edit, 1)
-        password_layout.addWidget(self.show_password_check)
-        password_layout.addWidget(generate_btn)
+        password_row.addLayout(password_edit_container)
+        password_row.addWidget(self.show_password_btn)
+        password_row.addWidget(generate_btn)
+        
+        password_layout.addLayout(password_row)
+        
+        # Add a note about empty passwords
+        empty_note = QLabel("Note: Empty passwords will be stored as NULL in the database")
+        empty_note.setStyleSheet("color: #666; font-size: 0.9em;")
+        password_layout.addWidget(empty_note)
         
         form_layout.addRow("Password*:", password_layout)
+        
+        # Connect password edit changes to update the empty password indicator and strength meter
+        self.password_edit.textChanged.connect(self.update_password_strength)
+        self.password_edit.textChanged.connect(self.update_empty_password_indicator)
+        
+        # Set initial password strength
+        self.update_password_strength()
         
         # URL
         self.url_edit = QLineEdit(self.entry.url or "")
@@ -270,50 +318,119 @@ class EntryDialog(QDialog):
         """Toggle password visibility."""
         if checked:
             self.password_edit.setEchoMode(QLineEdit.Normal)
+            self.show_password_btn.setIcon(QIcon(":/icons/eye-off.png"))
+            # When showing password, hide the empty password indicator
+            self.empty_password_indicator.setVisible(False)
         else:
             self.password_edit.setEchoMode(QLineEdit.Password)
+            self.show_password_btn.setIcon(QIcon(":/icons/eye.png"))
+            # When hiding password, show the empty password indicator if password is empty
+            self.update_empty_password_indicator()
+    
+    def update_password_strength(self):
+        """Update the password strength meter and label based on the current password."""
+        password = self.password_edit.text()
+        
+        if not password:
+            strength = 0
+            label = "Empty password"
+            color = "#ff4444"  # Red
+        else:
+            # Simple password strength calculation
+            strength = 0
+            
+            # Length check
+            length = len(password)
+            if length < 6:
+                strength += 10
+            elif length < 10:
+                strength += 20
+            else:
+                strength += 30
+            
+            # Character variety
+            has_lower = any(c.islower() for c in password)
+            has_upper = any(c.isupper() for c in password)
+            has_digit = any(c.isdigit() for c in password)
+            has_special = any(not c.isalnum() for c in password)
+            
+            if has_lower:
+                strength += 10
+            if has_upper:
+                strength += 10
+            if has_digit:
+                strength += 20
+            if has_special:
+                strength += 30
+            
+            # Set label and color based on strength
+            if strength < 30:
+                label = "Very Weak"
+                color = "#ff4444"  # Red
+            elif strength < 60:
+                label = "Weak"
+                color = "#ffbb33"  # Orange
+            elif strength < 80:
+                label = "Good"
+                color = "#00C851"  # Green
+            else:
+                label = "Strong"
+                color = "#00C851"  # Green
+        
+        # Update the strength meter
+        self.password_strength.setValue(strength)
+        
+        # Set the color of the strength meter
+        style = f"""
+            QProgressBar::chunk {{
+                background-color: {color};
+                width: 10px;
+                margin: 0px;
+            }}
+        """
+        self.password_strength.setStyleSheet(style)
+        
+        # Update the label
+        self.password_strength_label.setText(f"Strength: {label}")
+        self.password_strength_label.setStyleSheet(f"color: {color}; font-size: 0.8em;")
+        
+        # Update the empty password indicator
+        self.update_empty_password_indicator()
+    
+    def update_empty_password_indicator(self):
+        """Update the empty password indicator based on the current password text."""
+        is_empty = not self.password_edit.text()
+        self.empty_password_indicator.setVisible(is_empty)
+        
+        # If the password is empty, ensure the indicator is shown regardless of echo mode
+        if is_empty:
+            self.empty_password_indicator.setText("[Empty Password]")
+            self.empty_password_indicator.setStyleSheet("color: #888; font-style: italic;")
+        else:
+            self.empty_password_indicator.setVisible(False)
     
     def show_password_generator(self):
         """Show the password generator dialog."""
         dialog = PasswordGeneratorDialog(self)
         if dialog.exec() == QDialog.Accepted:
-            self.password_edit.setText(dialog.get_password())
-    
-    def validate(self):
-        """Validate the form before accepting."""
-        title = self.title_edit.text().strip()
-        password = self.password_edit.text()
-        
-        if not title:
-            QMessageBox.warning(self, "Validation Error", "Title is required.")
-            self.title_edit.setFocus()
-            return
-        
-        if not password and not self.entry.password:
-            QMessageBox.warning(self, "Validation Error", "Password is required.")
-            self.password_edit.setFocus()
-            return
-        
-        self.accept()
+            generated_password = dialog.get_password()
+            self.password_edit.setText(generated_password)
+            # Update the strength meter after setting the new password
+            self.update_password_strength()
     
     def get_entry(self):
-        """Get the password entry from the form data.
-        
-        Returns:
-            PasswordEntry: The updated password entry
-        """
-        # Only update password if it was changed
-        password = self.password_edit.text() or self.entry.password
-        
+        """Get the password entry from the form data."""
         # Parse tags
         tags = [tag.strip() for tag in self.tags_edit.text().split(",") if tag.strip()]
+        
+        # Get password from the edit field
+        password = self.password_edit.text()
         
         return PasswordEntry(
             id=self.entry.id,
             title=self.title_edit.text().strip(),
             username=self.username_edit.text().strip(),
             password=password,
-            url=self.url_edit.text().strip() or None,
             notes=self.notes_edit.toPlainText().strip() or None,
             folder=self.folder_edit.text().strip() or None,
             tags=tags,

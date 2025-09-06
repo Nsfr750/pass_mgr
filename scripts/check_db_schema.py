@@ -1,19 +1,20 @@
 import sqlite3
 
-def check_database():
+def check_db_schema():
     db_path = r"X:\GitHub\pass_mgr\data\passwords.db"
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
-    # List all tables
-    print("\nTables in the database:")
+    # Get all tables
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
     tables = cursor.fetchall()
+    
+    print("Tables in the database:")
     for table in tables:
         table_name = table[0]
         print(f"\nTable: {table_name}")
         
-        # Get table schema
+        # Get table info
         cursor.execute(f"PRAGMA table_info({table_name});")
         columns = cursor.fetchall()
         print("Columns:")
@@ -23,17 +24,9 @@ def check_database():
         # Get row count
         cursor.execute(f"SELECT COUNT(*) FROM {table_name};")
         count = cursor.fetchone()[0]
-        print(f"Row count: {count}")
-        
-        # Show first few rows if table is not empty
-        if count > 0:
-            cursor.execute(f"SELECT * FROM {table_name} LIMIT 5;")
-            rows = cursor.fetchall()
-            print("First few rows:")
-            for row in rows:
-                print(f"  {row}")
+        print(f"Total rows: {count}")
     
     conn.close()
 
 if __name__ == "__main__":
-    check_database()
+    check_db_schema()
