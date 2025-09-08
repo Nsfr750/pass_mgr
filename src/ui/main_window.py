@@ -176,9 +176,6 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.db = db_manager
         self.app = app  # Store the QApplication instance
-        from .theme_manager import ThemeManager
-        self.theme_manager = ThemeManager(app)
-        self.current_entries = []
         
         # Track current view state
         self.current_view = 'list'  # 'list' or 'grid'
@@ -187,10 +184,6 @@ class MainWindow(QMainWindow):
         # Initialize the main window with version
         from ..core.version import get_version
         self.setWindowTitle(f"Password Manager v{get_version()}")
-        self.setMinimumSize(1200, 700)
-        
-        # Set application style
-        self._setup_style()
         
         # Set up the main widget and layout
         self.main_widget = QWidget()
@@ -215,7 +208,15 @@ class MainWindow(QMainWindow):
         self.content_layout.setContentsMargins(12, 12, 12, 12)
         self.content_layout.setSpacing(8)
         
-        # Set up the UI
+        # Set up the UI with system theme
+        QApplication.setStyle("Fusion")  # Use Fusion style for consistent look across platforms
+        
+        # Apply system palette
+        system_palette = QApplication.style().standardPalette()
+        QApplication.setPalette(system_palette)
+        self.setPalette(system_palette)
+        
+        # Set up the UI components
         self._setup_menubar()
         self._setup_statusbar()  # Set up status bar first
         self._setup_toolbar()
@@ -227,6 +228,7 @@ class MainWindow(QMainWindow):
         
         # Initialize data
         self.entries = []
+        self.current_entries = []  # Initialize current_entries list
         self.grid_view = None  # Initialize grid_view attribute
         
         # Set up tooltip timer
@@ -243,42 +245,18 @@ class MainWindow(QMainWindow):
         # Load the data with loading indicator
         self.refresh_entries()
     
-    def _setup_style(self):
-        """Set up the application style and theme."""
-        # Set application style
+    def apply_system_theme(self):
+        """Apply system theme to the application."""
+        # Use system's palette
+        system_palette = QApplication.style().standardPalette()
+        QApplication.setPalette(system_palette)
+        self.setPalette(system_palette)
+        
+        # Apply minimal styling for consistency
         self.setStyleSheet("""
-            QMainWindow, QDialog, QWidget {
-                background-color: #f5f5f5;
-                color: #333333;
-                font-family: 'Segoe UI', Arial, sans-serif;
-            }
-            
-            QPushButton {
-                background-color: #e0e0e0;
-                border: 1px solid #bdbdbd;
-                border-radius: 4px;
-                padding: 5px 12px;
-                min-width: 80px;
-            }
-            
-            QPushButton:hover {
-                background-color: #d0d0d0;
-            }
-            
-            QPushButton:pressed {
-                background-color: #bdbdbd;
-            }
-            
-            QPushButton:disabled {
-                background-color: #eeeeee;
-                color: #9e9e9e;
-            }
-            
-            QLineEdit, QComboBox, QTextEdit, QPlainTextEdit {
-                border: 1px solid #bdbdbd;
-                border-radius: 4px;
-                padding: 5px 8px;
-                background: white;
+            QToolTip { 
+                border: 1px solid palette(highlight); 
+                padding: 2px;
                 selection-background-color: #90caf9;
             }
             
@@ -633,9 +611,10 @@ class MainWindow(QMainWindow):
             
             # Add entry data to the table
             self.table.setItem(row, 1, QTableWidgetItem(entry.title))
-            self.table.setItem(row, 2, QTableWidgetItem(entry.username))
-            self.table.setItem(row, 3, QTableWidgetItem(entry.url))
-            self.table.setItem(row, 4, QTableWidgetItem(entry.updated_at.strftime("%Y-%m-%d %H:%M")))
+            self.table.setItem(row, 2, QTableWidgetItem(entry.username if hasattr(entry, 'username') else ''))
+            self.table.setItem(row, 3, QTableWidgetItem(entry.url if hasattr(entry, 'url') else ''))
+            updated_at = entry.updated_at.strftime("%Y-%m-%d %H:%M") if hasattr(entry, 'updated_at') and entry.updated_at else 'N/A'
+            self.table.setItem(row, 4, QTableWidgetItem(updated_at))
             
             # Store the entry ID in the first column's data role
             if hasattr(entry, 'id'):
@@ -704,6 +683,9 @@ class MainWindow(QMainWindow):
             else:
                 self.entries = self.db.get_all_entries()
                 feedback.show_loading(f"Loaded {len(self.entries)} entries")
+            
+            # Update current_entries to match the loaded entries
+            self.current_entries = self.entries
             
             # Update views
             self._update_table_view()
@@ -962,7 +944,7 @@ class MainWindow(QMainWindow):
             )
     
     def delete_entry(self, index=None, entry_id=None, skip_confirm=False):
-        """Delete the selected password entries with enhanced feedback.
+        """Delete the selected password entry with enhanced feedback.
         
         Args:
             index: Optional QModelIndex of the item to delete (for grid view)
@@ -970,147 +952,104 @@ class MainWindow(QMainWindow):
             skip_confirm: If True, skip confirmation dialog (use with caution)
         """
         try:
-            # Get the entry ID to delete
-            if entry_id is None and index is not None:
-                # Get entry from grid view
-                entry = self.entries[index.row()]
-                entry_id = entry.id
-            
-            # Get entry details for confirmation message
-            entry = None
+            # Handle case where index is a boolean (incorrect signal connection)
+            if isinstance(index, bool):
+                index = None
+                
             entry_ids = []
+            entries_to_delete = []
             
-            if entry_id:
-                # Single entry deletion
-                entry = self.db.get_entry(entry_id)
-                if not entry:
-                    feedback.show_message("Entry not found", "Error", "error")
-                    return
-                entry_ids = [entry_id]
+            # If entry_id is provided, use it directly
+            if entry_id is not None:
+                entry_ids = [str(entry_id)]
+                entry = next((e for e in self.entries if str(e.id) == str(entry_id)), None)
+                if entry:
+                    entries_to_delete = [entry]
             else:
-                # Multiple entries deletion (from table selection)
-                selected_rows = set()
-                for item in self.table_widget.selectedItems():
-                    selected_rows.add(item.row())
-                
-                if not selected_rows:
-                    feedback.show_message("No entries selected", "Information", "info")
-                    return
-                
-                for row in selected_rows:
-                    entry_id = self.entries[row].id
-                    entry_ids.append(entry_id)
+                # Handle grid view selection
+                if index is not None and hasattr(index, 'data') and callable(index.data):
+                    entry = index.data(Qt.UserRole)
+                    if entry and hasattr(entry, 'id'):
+                        entry_ids = [str(entry.id)]
+                        entries_to_delete = [entry]
+                else:
+                    # Handle list view selection (multiple rows can be selected)
+                    selected = self.table.selectionModel().selectedRows()
+                    if not selected:
+                        QMessageBox.warning(self, "No Selection", "Please select at least one entry to delete.")
+                        return
+                    
+                    # Get all selected entry IDs
+                    for row in selected:
+                        entry_id = self.table.item(row.row(), 1).data(Qt.UserRole)
+                        entry = next((e for e in self.entries if str(e.id) == str(entry_id)), None)
+                        if entry:
+                            entry_ids.append(str(entry_id))
+                            entries_to_delete.append(entry)
             
-            # If not skipping confirmation, show detailed confirmation dialog
+            if not entries_to_delete:
+                QMessageBox.warning(self, "Error", "No valid entries selected for deletion.")
+                return
+            
+            # Ask for confirmation
             if not skip_confirm:
-                confirm_dialog = QMessageBox(self)
-                confirm_dialog.setIcon(QMessageBox.Warning)
-                confirm_dialog.setWindowTitle("Confirm Deletion")
-                
-                if len(entry_ids) == 1 and entry:
-                    # Single entry confirmation
-                    confirm_dialog.setText(
-                        f"<b>Are you sure you want to delete this entry?</b>"
-                        f"<br><br>"
-                        f"<b>Title:</b> {entry.title or 'Untitled'}<br>"
-                        f"<b>Username:</b> {entry.username or 'N/A'}<br>"
-                        f"<b>URL:</b> {entry.url or 'N/A'}"
-                    )
+                if len(entries_to_delete) == 1:
+                    message = f"Are you sure you want to delete the entry for '{entries_to_delete[0].title}'?"
                 else:
-                    # Multiple entries confirmation
-                    confirm_dialog.setText(
-                        f"<b>Are you sure you want to delete {len(entry_ids)} selected entries?</b>"
-                        "<br><br>"
-                        "This action cannot be undone."
-                    )
+                    titles = "\n- " + "\n- ".join([e.title for e in entries_to_delete])
+                    message = f"Are you sure you want to delete the following {len(entries_to_delete)} entries?{titles}"
                 
-                confirm_dialog.setInformativeText(
-                    "This action cannot be undone. The entry will be permanently deleted."
-                )
-                confirm_dialog.setStandardButtons(
-                    QMessageBox.Yes | QMessageBox.Cancel
-                )
-                confirm_dialog.setDefaultButton(QMessageBox.Cancel)
-                confirm_dialog.setEscapeButton(QMessageBox.Cancel)
-                
-                # Add a checkbox to confirm deletion
-                confirm_checkbox = QCheckBox("I understand this action cannot be undone")
-                confirm_checkbox.setChecked(False)
-                
-                # Create a container widget for the checkbox
-                container = QWidget()
-                layout = QVBoxLayout(container)
-                layout.addWidget(confirm_checkbox)
-                layout.setContentsMargins(0, 10, 0, 0)
-                
-                # Add the container to the dialog
-                confirm_dialog.layout().addWidget(container, 1, 1, 1, confirm_dialog.layout().columnCount())
-                
-                # Disable the Yes button until the checkbox is checked
-                yes_button = confirm_dialog.button(QMessageBox.Yes)
-                yes_button.setEnabled(False)
-                confirm_checkbox.stateChanged.connect(
-                    lambda state: yes_button.setEnabled(state == Qt.Checked)
+                reply = QMessageBox.question(
+                    self,
+                    "Confirm Delete",
+                    f"{message}\n\nThis action cannot be undone.",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No
                 )
                 
-                # Show the dialog and get the result
-                result = confirm_dialog.exec_()
-                
-                if result != QMessageBox.Yes:
-                    return  # User cancelled
+                if reply == QMessageBox.No:
+                    return
             
-            # Show loading indicator
-            feedback.show_loading("Deleting entry...")
+            # Delete all selected entries from the database
+            success_count = 0
+            for entry_id in entry_ids:
+                if self.db.delete_entry(entry_id):
+                    success_count += 1
             
-            try:
-                # Perform the deletion
-                success_count = 0
-                for eid in entry_ids:
-                    try:
-                        self.db.delete_entry(eid)
-                        success_count += 1
-                    except Exception as e:
-                        logger.error(f"Error deleting entry {eid}: {str(e)}")
-                
-                # Show appropriate feedback
-                if success_count == 0:
-                    feedback.show_message(
-                        "Failed to delete entries. See logs for details.",
-                        "Error",
-                        "error"
-                    )
-                elif success_count == len(entry_ids):
-                    feedback.show_message(
-                        f"Successfully deleted {success_count} entry(ies)",
-                        "Success"
-                    )
+            # Update the local list
+            self.entries = [e for e in self.entries if str(e.id) not in entry_ids]
+            
+            # Show success message
+            if success_count > 0:
+                if success_count == 1:
+                    QMessageBox.information(self, "Success", "Entry deleted successfully!")
                 else:
-                    feedback.show_message(
-                        f"Deleted {success_count} of {len(entry_ids)} entries. Some deletions failed.",
-                        "Partial Success",
-                        "warning"
-                    )
-                
+                    QMessageBox.information(self, "Success", f"{success_count} entries deleted successfully!")
                 # Refresh the view
                 self.refresh_entries()
                 
-            except Exception as e:
-                logger.error(f"Error during deletion: {str(e)}", exc_info=True)
-                feedback.show_message(
-                    f"An error occurred while deleting entries: {str(e)}",
+                # Update the UI
+                self.refresh_entries()
+                
+                # Show success message
+                QMessageBox.information(
+                    self,
+                    "Success",
+                    f"Entry '{entry.title}' has been deleted successfully."
+                )
+            else:
+                QMessageBox.critical(
+                    self,
                     "Error",
-                    "error"
+                    "Failed to delete the entry. Please check the logs for more details."
                 )
                 
-            finally:
-                # Ensure loading indicator is hidden
-                feedback.show_loading(show=False)
         except Exception as e:
-            logger.error(f"Unexpected error in delete_entry: {str(e)}", exc_info=True)
-            feedback.show_message(
-                f"An unexpected error occurred: {str(e)}",
+            logger.error(f"Unexpected error in delete_entry: {e}", exc_info=True)
+            QMessageBox.critical(
+                self,
                 "Error",
-                "error"
+                f"An unexpected error occurred: {str(e)}\n\nPlease check the logs for more details."
             )
 
     def refresh_dashboard(self):
@@ -1450,13 +1389,44 @@ class MainWindow(QMainWindow):
                 f"Failed to restore from backup:\n{str(e)}"
             )
     
-    def _apply_settings(self):
-        """Apply the current settings."""
+    def clear_clipboard(self):
+        """Clear the clipboard contents."""
         try:
-            self.theme_manager.apply_theme()
-            logger.info("Settings applied and theme updated.")
+            from PySide6.QtWidgets import QApplication
+            clipboard = QApplication.clipboard()
+            clipboard.clear()
+            logger.info("Clipboard cleared")
+            QMessageBox.information(
+                self,
+                "Clipboard Cleared",
+                "Clipboard has been cleared successfully."
+            )
         except Exception as e:
-            logger.error(f"Failed to apply settings: {e}")
+            logger.error(f"Error clearing clipboard: {e}")
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Failed to clear clipboard:\n{str(e)}"
+            )
+    
+    def _apply_settings(self):
+        """Apply system theme to all windows and dialogs."""
+        try:
+            # Apply Fusion style for consistent look across platforms
+            QApplication.setStyle("Fusion")
+            
+            # Use system palette
+            system_palette = QApplication.style().standardPalette()
+            QApplication.setPalette(system_palette)
+            self.setPalette(system_palette)
+            
+            # Apply to all top-level widgets
+            for widget in QApplication.topLevelWidgets():
+                widget.setPalette(system_palette)
+                
+            logger.info("System theme applied to all windows and dialogs.")
+        except Exception as e:
+            logger.error(f"Failed to apply system theme: {e}")
         
     def check_for_updates(self):
         """Check for application updates and show the update dialog"""
@@ -1484,7 +1454,78 @@ class MainWindow(QMainWindow):
 
     def show_password_analyzer(self):
         """Show the password analyzer dialog."""
-        QMessageBox.information(self, "Not Implemented", "The password analyzer is not yet implemented.")
+        from .password_analyzer_dialog import PasswordAnalyzerDialog
+        dialog = PasswordAnalyzerDialog(self.db, self)
+        dialog.exec_()
+        
+    def show_password_audit(self):
+        """Show the password audit dialog."""
+        from .password_audit_dialog import PasswordAuditDialog
+        dialog = PasswordAuditDialog(self.db, self)
+        dialog.exec_()
+        
+    def show_breach_monitor(self):
+        """Show the breach monitor dialog."""
+        from .breach_monitor_dialog import BreachMonitorDialog
+        dialog = BreachMonitorDialog(self.db, self)
+        dialog.exec_()
+        
+    def show_emergency_access(self):
+        """Show the emergency access dialog."""
+        from .emergency_access_dialog import EmergencyAccessDialog
+        dialog = EmergencyAccessDialog(self)
+        dialog.exec_()
+        
+    def show_password_sharing(self):
+        """Show the password sharing dialog."""
+        from .password_sharing_dialog import PasswordSharingDialog
+        dialog = PasswordSharingDialog(self.db, self)
+        dialog.exec_()
+        
+    def check_duplicate_passwords(self):
+        """Check for and display duplicate passwords in the database."""
+        try:
+            entries = self.db.get_all_entries()  # Fixed: Using get_all_entries() instead of get_entries()
+            
+            # Create a dictionary to store passwords and their entries
+            password_map = {}
+            
+            # Group entries by password
+            for entry in entries:
+                if hasattr(entry, 'password'):
+                    if entry.password not in password_map:
+                        password_map[entry.password] = []
+                    password_map[entry.password].append(entry)
+            
+            # Find passwords with more than one entry
+            duplicates = {pwd: entries for pwd, entries in password_map.items() 
+                        if len(entries) > 1 and pwd}  # Skip empty passwords
+            
+            if not duplicates:
+                QMessageBox.information(
+                    self, 
+                    self.tr("No Duplicates Found"),
+                    self.tr("No duplicate passwords found in your database.")
+                )
+                return
+                
+            # Show the duplicates in a dialog
+            from .duplicate_passwords_dialog import DuplicatePasswordsDialog
+            dialog = DuplicatePasswordsDialog(duplicates, self)
+            dialog.exec_()
+            
+        except Exception as e:
+            logger.error(f"Error checking for duplicate passwords: {e}")
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr(f"An error occurred while checking for duplicate passwords: {str(e)}")
+            )
+        
+    def show_log_viewer(self):
+        """Show the log viewer dialog."""
+        from .log_view import show_log_viewer
+        show_log_viewer(self)
 
     def show_settings(self):
         """Show the settings dialog."""
@@ -1492,12 +1533,27 @@ class MainWindow(QMainWindow):
         dialog.settings_changed.connect(self._apply_settings)
         dialog.exec()
 
+    def show_about_dialog(self, parent=None):
+        """Show the about dialog.
+        
+        Args:
+            parent: Parent widget for the dialog
+        """
+        from .about import show_about_dialog
+        show_about_dialog(parent or self)
+        
+    def show_help_dialog(self):
+        """Show the help dialog."""
+        from .help_dialog import HelpDialog
+        dialog = HelpDialog(self)
+        dialog.exec_()
+        
     def open_wiki(self):
-        # Open the application's wiki in the default web browser.
+        """Open the online documentation in the default web browser."""
         from PySide6.QtGui import QDesktopServices
         from PySide6.QtCore import QUrl
         
-        wiki_url = QUrl("https://github.com/Nsfr750/pass_mgr/wiki")
+        wiki_url = QUrl("https://github.com/yourusername/pass_mgr/wiki")
         if not QDesktopServices.openUrl(wiki_url):
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.warning(

@@ -78,6 +78,11 @@ class MenuBar(QMenuBar):
         share_action = QAction("Share Entry...", self)
         share_action.triggered.connect(self.parent.share_entry)
         share_menu.addAction(share_action)
+        
+        # Add Password Sharing
+        password_sharing_action = QAction("Password Sharing...", self)
+        password_sharing_action.triggered.connect(self.parent.show_password_sharing)
+        share_menu.addAction(password_sharing_action)
 
         manage_shares_action = QAction("Manage Shares...", self)
         manage_shares_action.triggered.connect(self.parent.manage_shares)
@@ -128,57 +133,67 @@ class MenuBar(QMenuBar):
         # Tools menu
         tools_menu = self.addMenu("&Tools")
 
-        password_generator_action = QAction("Password &Generator...", self)
-        password_generator_action.triggered.connect(self.parent.show_password_generator)
-        tools_menu.addAction(password_generator_action)
-
-        password_analyzer_action = QAction("Password &Analyzer...", self)
-        password_analyzer_action.triggered.connect(self.parent.show_password_analyzer)
-        tools_menu.addAction(password_analyzer_action)
-
-        tools_menu.addSeparator()
-
         settings_action = QAction("&Settings...", self)
         settings_action.triggered.connect(self.parent.show_settings)
         tools_menu.addAction(settings_action)
+        
+        tools_menu.addSeparator()
+        
+        log_viewer_action = QAction("View &Logs...", self)
+        log_viewer_action.triggered.connect(self.parent.show_log_viewer)
+        tools_menu.addAction(log_viewer_action)
+        
+        tools_menu.addSeparator()
+               
+        # Security submenu
+        security_menu = tools_menu.addMenu("&Security")
+        
+        # Emergency Access
+        emergency_action = QAction("&Emergency Access...", self)
+        emergency_action.triggered.connect(self.parent.show_emergency_access)
+        security_menu.addAction(emergency_action)
+        
+        # Breach Monitor
+        breach_monitor_action = QAction("&Breach Monitor...", self)
+        breach_monitor_action.triggered.connect(self.parent.show_breach_monitor)
+        security_menu.addAction(breach_monitor_action)
+        
+        # Password Analyzer
+        analyzer_action = QAction("Password &Analyzer...", self)
+        analyzer_action.triggered.connect(self.parent.show_password_analyzer)
+        security_menu.addAction(analyzer_action)
+        
+        # Password Audit
+        audit_action = QAction("Password &Audit...", self)
+        audit_action.triggered.connect(self.parent.show_password_audit)
+        security_menu.addAction(audit_action)
+        
+        # Password Sharing
+        sharing_action = QAction("Password &Sharing...", self)
+        sharing_action.triggered.connect(self.parent.show_password_sharing)
+        security_menu.addAction(sharing_action)
+        
+        # Duplicate Checker
+        duplicate_action = QAction("Check for &Duplicates...", self)
+        duplicate_action.triggered.connect(self.parent.check_duplicate_passwords)
+        security_menu.addAction(duplicate_action)
+        
+        # Clear Clipboard
+        clear_clipboard_action = QAction("&Clear Clipboard", self)
+        clear_clipboard_action.triggered.connect(self.parent.clear_clipboard)
+        security_menu.addAction(clear_clipboard_action)
+        
+        # Add separator
+        security_menu.addSeparator()
 
-        # Help menu
-        help_menu = self.addMenu("&Help")
-
-        docs_action = QAction("&Documentation...", self)
-        docs_action.triggered.connect(self.parent.open_wiki)
-        help_menu.addAction(docs_action)
-
-        help_menu.addSeparator()
-
-        check_updates_action = QAction("Check for &Updates...", self)
-        check_updates_action.triggered.connect(self.parent.check_for_updates)
-        help_menu.addAction(check_updates_action)
-
-        help_menu.addSeparator()
-
-        about_action = QAction("&About", self)
-        about_action.triggered.connect(lambda: self.parent.show_about_dialog(self.parent))
-        help_menu.addAction(about_action)
-
-        sponsor_action = QAction("Support Us ❤️", self)
-        sponsor_action.triggered.connect(self.parent.show_sponsor_dialog)
-        help_menu.addAction(sponsor_action)
-
-        # Add conditional DEBUG menu
-        if is_debug_menu_enabled():
-            self._setup_debug_menu()
-
-    def _setup_debug_menu(self):
-        """Set up the debug menu with actions to run scripts."""
-        debug_menu = self.addMenu("&DEBUG")
+        debug_menu = tools_menu.addMenu("&DEBUG")
 
         scripts = [
+            "add_sharing_tables.py",
+            "fix_share_activities.py",
             "migrate_empty_passwords.py",
             "set_master_password.py",
             "setup.py",
-            "add_sharing_tables.py",
-            "fix_share_activities.py",
             "verify_db.py"
         ]
 
@@ -186,7 +201,46 @@ class MenuBar(QMenuBar):
             action = QAction(f"Run {script_name}", self)
             action.triggered.connect(lambda checked=False, name=script_name: self.parent._run_debug_script(name))
             debug_menu.addAction(action)
+
+        # Add separator
+        security_menu.addSeparator()
+
+        # Help menu
+        help_menu = self.addMenu("&Help")
+
+        help_action = QAction("&Help...", self)
+        help_action.setShortcut(QKeySequence.HelpContents)
+        help_action.triggered.connect(self.parent.show_help_dialog)
+        help_menu.addAction(help_action)
+
+        about_action = QAction("&About", self)
+        about_action.triggered.connect(lambda: self.parent.show_about_dialog(self.parent))
+        help_menu.addAction(about_action)
         
+        help_menu.addSeparator()
+        
+        # Wiki action
+        wiki_action = QAction("&Wiki", self)
+        wiki_action.triggered.connect(self.parent.open_wiki)
+        help_menu.addAction(wiki_action)
+        
+        # Issues action
+        issues_action = QAction("Report &Issues", self)
+        issues_action.triggered.connect(self.parent.open_issues)
+        help_menu.addAction(issues_action)
+
+        help_menu.addSeparator()
+
+        sponsor_action = QAction("Support Us ❤️", self)
+        sponsor_action.triggered.connect(self.parent.show_sponsor_dialog)
+        help_menu.addAction(sponsor_action)
+
+        help_menu.addSeparator()
+
+        check_updates_action = QAction("Check for &Updates...", self)
+        check_updates_action.triggered.connect(self.parent.check_for_updates)
+        help_menu.addAction(check_updates_action)
+       
     def add_importer(self, importer):
         """Add an importer to the import menu.
         
@@ -228,3 +282,34 @@ class MenuBar(QMenuBar):
         for menu in self.findChildren(QMenu):
             for action in menu.actions():
                 action.setEnabled(True)
+
+        self.add_action.setEnabled(enabled)
+        self.edit_action.setEnabled(enabled)
+        self.delete_action.setEnabled(enabled)
+        self.export_action.setEnabled(enabled)
+        self.refresh_action.setEnabled(enabled)
+        self.share_action.setEnabled(enabled)
+        self.password_sharing_action.setEnabled(enabled)
+        self.manage_shares_action.setEnabled(enabled)
+        self.view_requests_action.setEnabled(enabled)
+        self.select_all_action.setEnabled(enabled)
+        self.deselect_all_action.setEnabled(enabled)
+        self.toggle_dashboard_action.setEnabled(enabled)
+        self.list_view_action.setEnabled(enabled)
+        self.grid_view_action.setEnabled(enabled)
+        self.settings_action.setEnabled(enabled)
+        self.log_viewer_action.setEnabled(enabled)
+        self.emergency_action.setEnabled(enabled)
+        self.breach_monitor_action.setEnabled(enabled)
+        self.analyzer_action.setEnabled(enabled)
+        self.audit_action.setEnabled(enabled)
+        self.sharing_action.setEnabled(enabled)
+        self.duplicate_action.setEnabled(enabled)
+        self.clear_clipboard_action.setEnabled(enabled)
+        self.check_updates_action.setEnabled(enabled)
+        self.sponsor_action.setEnabled(enabled)
+        self.help_action.setEnabled(enabled)
+        self.about_action.setEnabled(enabled)
+        self.wiki_action.setEnabled(enabled)
+        self.issues_action.setEnabled(enabled)
+        self.debug_menu.setEnabled(enabled)

@@ -10,7 +10,7 @@ import shutil
 
 # Local imports
 from .config import get_database_path
-from utils.logging_config import get_logger
+from ..utils.logging_config import get_logger
 
 from .security import (
     derive_key, 

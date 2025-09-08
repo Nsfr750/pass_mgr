@@ -1,7 +1,8 @@
 """Dialog for adding or editing password entries."""
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QLineEdit,
-    QTextEdit, QDialogButtonBox, QPushButton, QCheckBox, QMessageBox, QProgressBar
+    QTextEdit, QDialogButtonBox, QPushButton, QCheckBox, QMessageBox, QProgressBar,
+    QSlider
 )
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtCore import Qt, Signal, QSize
